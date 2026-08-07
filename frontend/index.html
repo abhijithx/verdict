@@ -8,7 +8,7 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -16,38 +16,33 @@
             theme: {
                 extend: {
                     colors: {
-                        'bg-void':      '#0d0e0c',
-                        'bg-surface':   '#16180f',
-                        'bg-surface-2': '#1c1f16',
-                        'line':         '#2b2f22',
-                        'text-primary': '#e8e6df',
-                        'text-muted':   '#8a8d7f',
-                        'text-dim':     '#52564a',
-                        'accent':       '#5ddc7a',
-                        'accent-dim':   '#3a8f52',
-                        'fail':         '#e0563f',
-                        'warn':         '#d9a441',
-
-                        // Compatibility aliases mapped directly to new tokens
-                        'surface-0':    '#0d0e0c',
-                        'surface-1':    '#16180f',
-                        'surface-2':    '#1c1f16',
-                        'surface-3':    '#2b2f22',
-                        'border-0':     '#2b2f22',
-                        'border-1':     '#2b2f22',
-                        'text-0':       '#e8e6df',
-                        'text-1':       '#8a8d7f',
-                        'text-2':       '#8a8d7f',
-                        'text-3':       '#52564a',
-                        'green-0':      '#5ddc7a',
-                        'green-1':      '#3a8f52',
-                        'red-0':        '#e0563f',
-                        'red-1':        '#e0563f',
-                        'amber-0':      '#d9a441',
+                        'canvas':     '#0B0E14',
+                        'surface-0':  '#0B0E14',
+                        'surface-1':  '#11151C',
+                        'surface-2':  '#161B22',
+                        'surface-3':  '#1C2128',
+                        'border-0':   'rgba(255,255,255,0.08)',
+                        'border-1':   '#30363C',
+                        'text-0':     '#E6EDF3',
+                        'text-1':     '#8B949E',
+                        'text-2':     '#8B949E',
+                        'text-3':     '#6E7681',
+                        'green-0':    '#3FB950',
+                        'green-1':    '#238636',
+                        'green-2':    '#2EA043',
+                        'red-0':      '#F85149',
+                        'red-1':      '#F85149',
+                        'amber-0':    '#D29922',
+                        'blue-0':     '#58A6FF',
+                        'accent':     '#3FB950',
+                        'accent-dim': '#238636',
+                        'fail':       '#F85149',
+                        'warn':       '#D29922',
+                        'line':       '#30363C',
                     },
                     fontFamily: {
-                        'sans': ['IBM Plex Sans', 'Söhne', 'system-ui', 'sans-serif'],
-                        'mono': ['IBM Plex Mono', 'Berkeley Mono', 'monospace'],
+                        'sans': ['Inter', '-apple-system', 'BlinkMacSystemFont', 'system-ui', 'sans-serif'],
+                        'mono': ['JetBrains Mono', 'SFMono-Regular', 'ui-monospace', 'monospace'],
                     },
                 }
             }
@@ -59,42 +54,38 @@
 </head>
 <body class="bg-surface-0 text-text-0 font-sans h-screen flex flex-col overflow-hidden select-none">
 
-    <!-- ======== NAVIGATION BAR ======== -->
-    <header id="top-bar" class="h-12 bg-surface-1 border-b border-border-0 flex items-center justify-between px-6 z-50 font-mono">
-        <div class="flex items-center gap-6">
-            <a href="#home" onclick="App.switchView('home')" class="flex items-center gap-2 group">
-                <div class="w-6 h-6 rounded-none bg-surface-2 border border-border-0 flex items-center justify-center text-accent text-xs font-mono font-bold">
-                    &gt;_
-                </div>
-                <span class="text-sm font-bold tracking-tight text-text-0 font-mono">Verdict <span class="text-xs text-text-2 font-mono">[AI]</span></span>
+    <!-- ======== NAVIGATION BAR — 56px, backdrop-blur, hairline border ======== -->
+    <header id="top-bar" class="h-14 bg-surface-1/80 backdrop-blur-md border-b border-border-0 flex items-center justify-between px-5 z-50 shrink-0">
+        <div class="flex items-center gap-5">
+            <a href="#home" onclick="App.switchView('home')" class="flex items-center gap-2.5 group">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" class="text-green-0">
+                    <path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    <rect x="3" y="3" width="18" height="18" rx="4" stroke="currentColor" stroke-width="1.5"/>
+                </svg>
+                <span class="text-[15px] font-semibold tracking-[-0.02em] text-text-0">Verdict</span>
+                <span class="text-[11px] font-mono text-text-3 font-medium">[AI]</span>
             </a>
 
-            <nav class="hidden md:flex items-center gap-1">
-                <a href="#home" data-view="home" onclick="App.switchView('home')" class="nav-link active-nav">
-                    Home
-                </a>
-                <a href="#recommendation" data-view="recommendation" onclick="App.switchView('recommendation')" class="nav-link">
-                    Solution Recommendation
-                </a>
-                <a href="#evaluation" data-view="evaluation" onclick="App.switchView('evaluation')" class="nav-link">
-                    Solution Evaluation
-                </a>
-                <a href="#history" data-view="history" onclick="App.switchView('history')" class="nav-link">
-                    History
-                </a>
-                <a href="#about" data-view="about" onclick="App.switchView('about')" class="nav-link">
-                    About
-                </a>
+            <div class="w-px h-5 bg-border-0"></div>
+
+            <nav class="hidden md:flex items-center gap-0.5">
+                <a href="#home" data-view="home" onclick="App.switchView('home')" class="nav-link active-nav">Home</a>
+                <a href="#recommendation" data-view="recommendation" onclick="App.switchView('recommendation')" class="nav-link">Recommendation</a>
+                <a href="#evaluation" data-view="evaluation" onclick="App.switchView('evaluation')" class="nav-link">Evaluation</a>
+                <a href="#history" data-view="history" onclick="App.switchView('history')" class="nav-link">History</a>
+                <a href="#about" data-view="about" onclick="App.switchView('about')" class="nav-link">About</a>
             </nav>
         </div>
 
-        <div class="flex items-center gap-3 font-mono">
-            <div id="pipeline-status" class="hidden items-center gap-2 text-2xs text-text-2 bg-surface-2 px-2.5 py-1 border border-border-0">
-                <div class="status-dot w-1.5 h-1.5 rounded-full bg-accent"></div>
-                <span id="pipeline-status-text">Processing</span>
+        <div class="flex items-center gap-3">
+            <div id="pipeline-status" class="hidden items-center gap-2 text-[11px] text-text-1 px-2 py-1">
+                <div class="status-dot w-1.5 h-1.5 rounded-full bg-green-0"></div>
+                <span id="pipeline-status-text" class="font-mono">Processing</span>
             </div>
+            <div class="status-chip"><span class="chip-dot"></span>piston</div>
+            <div class="status-chip"><span class="chip-dot"></span>gemini</div>
             <button id="btn-leaderboard" class="topbar-btn" onclick="App.showLeaderboard()" title="Leaderboard">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="12" width="5" height="8" rx="0"/><rect x="10" y="4" width="5" height="16" rx="0"/><rect x="17" y="8" width="5" height="12" rx="0"/></svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="12" width="5" height="8" rx="1"/><rect x="10" y="4" width="5" height="16" rx="1"/><rect x="17" y="8" width="5" height="12" rx="1"/></svg>
             </button>
         </div>
     </header>
@@ -103,261 +94,307 @@
     <div id="app-viewport" class="flex-1 relative overflow-hidden">
 
         <!-- ====================================================================
-             1. HOME LANDING PAGE VIEW (#home)
+             1. HOME LANDING PAGE VIEW
              ==================================================================== -->
-        <section id="view-home" class="h-full overflow-y-auto thin-scroll p-8 max-w-6xl mx-auto space-y-10">
+        <section id="view-home" class="h-full overflow-y-auto thin-scroll">
             <!-- Hero Section -->
-            <div class="space-y-4 pt-4 pb-2">
-                <div class="text-xs font-mono text-text-2 tracking-wider uppercase">
-                    TWO-STAGE CODE JUDGE
-                </div>
-                <h1 class="text-3xl md:text-5xl font-extrabold tracking-tight text-text-0 leading-tight font-mono">
-                    Recommend an approach.<br/>Verify the implementation.
-                </h1>
-                <p class="text-text-1 text-sm md:text-base max-w-2xl leading-relaxed font-sans">
-                    Verdict provides two independent tools for developers: algorithmic strategy recommendation before coding, and verified sandboxed execution testing after implementation. Correctness is evaluated by actually running code — not by AI reading text.
-                </p>
-                <div class="flex flex-wrap items-center gap-3 pt-2">
-                    <button onclick="App.switchView('recommendation')" class="cmd-btn cmd-primary text-xs font-semibold">
-                        Start Recommendation &gt;
-                    </button>
-                    <button onclick="App.switchView('evaluation')" class="cmd-btn cmd-secondary text-xs font-semibold">
-                        Start Evaluation &gt;
-                    </button>
-                </div>
-            </div>
-
-            <!-- Feature Cards Section -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div class="panel p-5 border border-border-0">
-                    <div class="w-8 h-8 bg-surface-2 border border-border-0 text-accent font-mono text-sm font-bold flex items-center justify-center mb-3">
-                        01
-                    </div>
-                    <h3 class="text-base font-bold text-text-0 font-mono mb-2">Solution Recommendation</h3>
-                    <p class="text-text-2 text-xs leading-relaxed font-sans mb-4">
-                        Stage 1 (Before implementation): Identifies optimal algorithm category, data structures, Big-O complexity bounds, clean reference code, and alternative trade-offs.
+            <div class="max-w-4xl mx-auto px-6 md:px-10 pt-16 pb-14 relative">
+                <div class="absolute top-0 left-1/3 w-[500px] h-[400px] bg-green-1/[0.06] rounded-full blur-[120px] pointer-events-none"></div>
+                <div class="relative space-y-6">
+                    <span class="text-[12px] font-medium text-text-3 uppercase tracking-[0.15em]">Two-Stage Code Judge</span>
+                    <h1 class="text-[40px] md:text-[56px] font-extrabold tracking-[-0.04em] text-text-0 leading-[1.08]">
+                        Recommend an approach.<br/>Verify the implementation.
+                    </h1>
+                    <p class="text-text-1 text-[16px] md:text-[18px] max-w-2xl leading-relaxed">
+                        AI-powered algorithmic strategy before coding. Deterministic, sandboxed execution scoring after. Correctness is evaluated by running code — not by reading it.
                     </p>
-                    <ul class="text-xs text-text-1 space-y-1 font-mono">
-                        <li><span class="text-accent">&gt;</span> Category &amp; Algorithm Analysis</li>
-                        <li><span class="text-accent">&gt;</span> Optimal Data Structure Recommendation</li>
-                        <li><span class="text-accent">&gt;</span> Big-O Time &amp; Space Complexity Bounds</li>
-                    </ul>
-                </div>
-
-                <div class="panel p-5 border border-border-0">
-                    <div class="w-8 h-8 bg-surface-2 border border-border-0 text-accent font-mono text-sm font-bold flex items-center justify-center mb-3">
-                        02
-                    </div>
-                    <h3 class="text-base font-bold text-text-0 font-mono mb-2">Solution Evaluation</h3>
-                    <p class="text-text-2 text-xs leading-relaxed font-sans mb-4">
-                        Stage 2 (After implementation): Compiles and executes code in sandboxed runtime (Piston) against AI-generated test cases to derive verified correctness and deterministic scores.
-                    </p>
-                    <ul class="text-xs text-text-1 space-y-1 font-mono">
-                        <li><span class="text-accent">&gt;</span> Real Execution Sandbox (Piston API)</li>
-                        <li><span class="text-accent">&gt;</span> Verified AI-Generated Test Suites</li>
-                        <li><span class="text-accent">&gt;</span> Deterministic 6-Signal Scoring Engine</li>
-                    </ul>
-                </div>
-            </div>
-
-            <!-- Architecture & Tech Stack Overview -->
-            <div class="panel p-6 border border-border-0 space-y-4">
-                <div class="flex items-center justify-between border-b border-border-0 pb-3">
-                    <div>
-                        <h3 class="text-sm font-bold text-text-0 font-mono">System Architecture</h3>
-                        <p class="text-text-2 text-xs font-sans">Decoupled microservices architecture</p>
-                    </div>
-                    <span class="px-2 py-0.5 border border-border-0 bg-surface-2 text-text-2 text-2xs font-mono">FastAPI / Gemini / Piston</span>
-                </div>
-
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-left font-mono text-xs">
-                    <div class="p-3 bg-surface-2 border border-border-0">
-                        <span class="text-2xs text-text-3 block uppercase">Frontend</span>
-                        <p class="font-semibold text-text-0 mt-0.5">SPA + Monaco</p>
-                    </div>
-                    <div class="p-3 bg-surface-2 border border-border-0">
-                        <span class="text-2xs text-text-3 block uppercase">AI Engine</span>
-                        <p class="font-semibold text-text-0 mt-0.5">Gemini 2.0 Flash</p>
-                    </div>
-                    <div class="p-3 bg-surface-2 border border-border-0">
-                        <span class="text-2xs text-text-3 block uppercase">Sandbox</span>
-                        <p class="font-semibold text-text-0 mt-0.5">Piston API</p>
-                    </div>
-                    <div class="p-3 bg-surface-2 border border-border-0">
-                        <span class="text-2xs text-text-3 block uppercase">Database</span>
-                        <p class="font-semibold text-text-0 mt-0.5">Async SQLite</p>
+                    <div class="flex flex-wrap items-center gap-3 pt-2">
+                        <button onclick="App.switchView('evaluation')" class="cmd-btn cmd-primary !h-9 !px-5 text-[14px] font-semibold">
+                            Start Evaluation
+                        </button>
+                        <button onclick="App.switchView('recommendation')" class="cmd-btn cmd-secondary !h-9 !px-5 text-[14px]">
+                            Start Recommendation
+                        </button>
                     </div>
                 </div>
             </div>
-        </section>
 
-
-        <!-- ====================================================================
-             2. SOLUTION RECOMMENDATION VIEW (#recommendation)
-             ==================================================================== -->
-        <section id="view-recommendation" class="h-full overflow-y-auto thin-scroll p-8 max-w-6xl mx-auto hidden space-y-8">
-            <div class="border-b border-border-0 pb-4 flex items-center justify-between">
-                <div>
-                    <h2 class="text-2xl font-extrabold text-white flex items-center gap-2">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                        Solution Recommendation Module
-                    </h2>
-                    <p class="text-text-2 text-xs mt-1">Stage 1: Get algorithmic strategy, optimal data structures, and code before implementation.</p>
+            <!-- Pipeline Steps -->
+            <div class="max-w-4xl mx-auto px-6 md:px-10 pb-12">
+                <h2 class="text-[13px] font-semibold text-text-3 uppercase tracking-[0.1em] mb-6">How the verdict is reached</h2>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="panel p-4">
+                        <span class="text-[11px] font-mono text-text-3 font-semibold">01</span>
+                        <h3 class="text-[14px] font-semibold text-text-0 mt-1.5 tracking-tight">Dry Run</h3>
+                        <p class="text-text-1 text-[12px] mt-1 leading-relaxed">Compile-check and basic runtime validation via Piston sandbox.</p>
+                    </div>
+                    <div class="panel p-4">
+                        <span class="text-[11px] font-mono text-text-3 font-semibold">02</span>
+                        <h3 class="text-[14px] font-semibold text-text-0 mt-1.5 tracking-tight">Test Generation</h3>
+                        <p class="text-text-1 text-[12px] mt-1 leading-relaxed">AI generates edge-case test suites with expected stdin/stdout pairs.</p>
+                    </div>
+                    <div class="panel p-4">
+                        <span class="text-[11px] font-mono text-text-3 font-semibold">03</span>
+                        <h3 class="text-[14px] font-semibold text-text-0 mt-1.5 tracking-tight">Sandboxed Execution</h3>
+                        <p class="text-text-1 text-[12px] mt-1 leading-relaxed">Code runs against all test cases in an isolated Piston runtime.</p>
+                    </div>
+                    <div class="panel p-4">
+                        <span class="text-[11px] font-mono text-text-3 font-semibold">04</span>
+                        <h3 class="text-[14px] font-semibold text-text-0 mt-1.5 tracking-tight">Deterministic Score</h3>
+                        <p class="text-text-1 text-[12px] mt-1 leading-relaxed">6-signal weighted scoring: correctness, performance, optimization, quality, readability, docs.</p>
+                    </div>
                 </div>
             </div>
 
-            <!-- Recommendation Form -->
-            <div class="glass-card p-6 rounded-2xl border border-border-0 space-y-5">
-                <div>
-                    <label class="field-label mb-1">Programming Problem Statement <span class="text-red-0">*</span></label>
-                    <textarea id="rec-problem" rows="4" placeholder="Describe the programming problem in detail (e.g. Find the length of the longest substring without repeating characters)..." class="field-input resize-none thin-scroll"></textarea>
-                </div>
-
+            <!-- Bento Feature Grid -->
+            <div class="max-w-4xl mx-auto px-6 md:px-10 pb-12">
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                        <label class="field-label-sm mb-1">Optional Constraints</label>
-                        <input id="rec-constraints" type="text" placeholder="e.g. 1 <= N <= 10^5, Time limit 1s" class="field-input">
+                    <div class="md:col-span-2 panel p-5">
+                        <div class="flex items-center gap-2 mb-4">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-green-0"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                            <h3 class="text-[14px] font-semibold text-text-0 tracking-tight">6-Signal Scoring Engine</h3>
+                        </div>
+                        <div class="space-y-2">
+                            <div class="score-bar-row"><span class="score-bar-lbl">Correctness</span><div class="score-bar-bg"><div class="score-bar-fill" style="width:95%"></div></div><span class="score-bar-val">95</span></div>
+                            <div class="score-bar-row"><span class="score-bar-lbl">Performance</span><div class="score-bar-bg"><div class="score-bar-fill" style="width:88%"></div></div><span class="score-bar-val">88</span></div>
+                            <div class="score-bar-row"><span class="score-bar-lbl">Optimization</span><div class="score-bar-bg"><div class="score-bar-fill" style="width:82%"></div></div><span class="score-bar-val">82</span></div>
+                            <div class="score-bar-row"><span class="score-bar-lbl">Quality</span><div class="score-bar-bg"><div class="score-bar-fill" style="width:90%"></div></div><span class="score-bar-val">90</span></div>
+                            <div class="score-bar-row"><span class="score-bar-lbl">Readability</span><div class="score-bar-bg"><div class="score-bar-fill" style="width:85%"></div></div><span class="score-bar-val">85</span></div>
+                            <div class="score-bar-row"><span class="score-bar-lbl">Documentation</span><div class="score-bar-bg"><div class="score-bar-fill" style="width:78%"></div></div><span class="score-bar-val">78</span></div>
+                        </div>
                     </div>
-                    <div>
-                        <label class="field-label-sm mb-1">Optional Sample Input</label>
-                        <input id="rec-sample-input" type="text" placeholder="e.g. abcabcbb" class="field-input">
+                    <div class="panel p-5 flex flex-col justify-between">
+                        <div>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-blue-0 mb-3"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                            <h3 class="text-[14px] font-semibold text-text-0 tracking-tight">Recommendation</h3>
+                            <p class="text-text-1 text-[12px] mt-2 leading-relaxed">Algorithm category, optimal data structures, Big-O bounds, and production-ready reference code.</p>
+                        </div>
+                        <button onclick="App.switchView('recommendation')" class="cmd-btn cmd-ghost text-blue-0 text-[12px] mt-4 !px-0 !justify-start">Explore →</button>
                     </div>
-                    <div>
-                        <label class="field-label-sm mb-1">Optional Sample Output</label>
-                        <input id="rec-sample-output" type="text" placeholder="e.g. 3" class="field-input">
-                    </div>
-                </div>
-
-                <div class="flex items-center justify-between pt-2">
-                    <div class="flex items-center gap-3">
-                        <label class="field-label-sm">Preferred Language:</label>
-                        <select id="rec-language" class="field-input !w-auto !py-1 !px-3 font-mono text-xs">
-                            <option value="" selected>Auto-select Best Language</option>
-                            <option value="Python">Python</option>
-                            <option value="C++">C++</option>
-                            <option value="Java">Java</option>
-                            <option value="JavaScript">JavaScript</option>
-                            <option value="Go">Go</option>
-                        </select>
-                    </div>
-
-                    <button id="btn-analyze-problem" onclick="RecommendationUI.analyze()" class="cmd-btn cmd-primary !h-10 !px-6 text-sm font-semibold shadow-lg shadow-accent/20">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-                        Analyze Problem
-                    </button>
                 </div>
             </div>
 
-            <!-- Skeleton Loader -->
-            <div id="rec-skeleton" class="hidden glass-card p-6 rounded-2xl border border-border-0 space-y-4">
-                <div class="h-6 w-1/3 skeleton rounded"></div>
-                <div class="grid grid-cols-4 gap-4">
-                    <div class="h-16 skeleton rounded-xl"></div>
-                    <div class="h-16 skeleton rounded-xl"></div>
-                    <div class="h-16 skeleton rounded-xl"></div>
-                    <div class="h-16 skeleton rounded-xl"></div>
+            <!-- Stats Strip -->
+            <div class="border-t border-b border-border-0 py-5">
+                <div class="max-w-4xl mx-auto px-6 md:px-10 grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+                    <div>
+                        <div class="text-[22px] font-bold font-mono text-text-0">3</div>
+                        <div class="text-[12px] text-text-1 mt-0.5">Languages Supported</div>
+                    </div>
+                    <div>
+                        <div class="text-[22px] font-bold font-mono text-text-0">6</div>
+                        <div class="text-[12px] text-text-1 mt-0.5">Signals Scored</div>
+                    </div>
+                    <div>
+                        <div class="text-[22px] font-bold font-mono text-text-0">~8s</div>
+                        <div class="text-[12px] text-text-1 mt-0.5">Avg Evaluation Time</div>
+                    </div>
+                    <div>
+                        <div class="text-[22px] font-bold font-mono text-text-0">2</div>
+                        <div class="text-[12px] text-text-1 mt-0.5">AI Providers</div>
+                    </div>
                 </div>
-                <div class="h-48 skeleton rounded-xl"></div>
             </div>
 
-            <!-- Recommendation Result Report -->
-            <div id="rec-report" class="hidden glass-card p-6 rounded-2xl border border-border-0 space-y-6">
-                <!-- Badges Header -->
-                <div class="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-border-0">
+            <!-- Footer -->
+            <footer class="py-8">
+                <div class="max-w-4xl mx-auto px-6 md:px-10 grid grid-cols-2 md:grid-cols-4 gap-8 text-[12px] text-text-3">
                     <div>
-                        <span id="rec-res-category" class="px-2.5 py-1 rounded text-xs font-semibold bg-accent/20 text-accent border border-accent/30 uppercase tracking-wider">Dynamic Programming</span>
-                        <h3 id="rec-res-algorithm" class="text-xl font-extrabold text-white mt-2">Optimal Approach</h3>
+                        <h4 class="font-semibold text-text-1 mb-3 text-[11px] uppercase tracking-wider">Product</h4>
+                        <ul class="space-y-1.5">
+                            <li><a href="#recommendation" onclick="App.switchView('recommendation')" class="hover:text-text-0 transition-colors cursor-pointer">Recommendation</a></li>
+                            <li><a href="#evaluation" onclick="App.switchView('evaluation')" class="hover:text-text-0 transition-colors cursor-pointer">Evaluation</a></li>
+                            <li><a href="#history" onclick="App.switchView('history')" class="hover:text-text-0 transition-colors cursor-pointer">History</a></li>
+                        </ul>
                     </div>
-                    <div class="flex items-center gap-3">
-                        <button id="btn-copy-rec-code" onclick="RecommendationUI.copyCode()" class="cmd-btn cmd-secondary text-xs">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                            Copy Code
+                    <div>
+                        <h4 class="font-semibold text-text-1 mb-3 text-[11px] uppercase tracking-wider">Stack</h4>
+                        <ul class="space-y-1.5"><li>FastAPI + SQLAlchemy</li><li>Gemini / Groq AI</li><li>Piston Sandbox</li></ul>
+                    </div>
+                    <div>
+                        <h4 class="font-semibold text-text-1 mb-3 text-[11px] uppercase tracking-wider">Resources</h4>
+                        <ul class="space-y-1.5">
+                            <li><a href="#about" onclick="App.switchView('about')" class="hover:text-text-0 transition-colors cursor-pointer">About</a></li>
+                            <li>Documentation</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 class="font-semibold text-text-1 mb-3 text-[11px] uppercase tracking-wider">About</h4>
+                        <p class="leading-relaxed">AI-powered two-stage code judge for algorithm recommendation and verified execution scoring.</p>
+                    </div>
+                </div>
+                <div class="max-w-4xl mx-auto px-6 md:px-10 mt-8 pt-4 border-t border-border-0 text-[11px] text-text-3">
+                    © 2025 Verdict AI. Built with FastAPI, Gemini, and Piston.
+                </div>
+            </footer>
+        </section>
+
+
+        <!-- ====================================================================
+             2. SOLUTION RECOMMENDATION VIEW
+             ==================================================================== -->
+        <section id="view-recommendation" class="h-full overflow-y-auto thin-scroll hidden">
+            <div class="max-w-4xl mx-auto px-6 md:px-10 py-8 space-y-6">
+                <!-- Header -->
+                <div class="border-b border-border-0 pb-5">
+                    <h2 class="text-[22px] font-semibold text-text-0 tracking-[-0.02em]">Solution Recommendation</h2>
+                    <p class="text-text-1 text-[14px] mt-1">Describe a problem to get optimal algorithm, data structures, complexity analysis, and working code.</p>
+                </div>
+
+                <!-- Form -->
+                <div class="panel p-6 space-y-5">
+                    <div>
+                        <label class="field-label mb-1.5">Problem Statement <span class="text-red-0">*</span></label>
+                        <textarea id="rec-problem" rows="4" placeholder="Describe the programming problem in detail (e.g. Find the length of the longest substring without repeating characters)..." class="field-input resize-none thin-scroll"></textarea>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="field-label-sm mb-1">Constraints</label>
+                            <input id="rec-constraints" type="text" placeholder="e.g. 1 <= N <= 10^5" class="field-input">
+                        </div>
+                        <div>
+                            <label class="field-label-sm mb-1">Sample Input</label>
+                            <input id="rec-sample-input" type="text" placeholder="e.g. abcabcbb" class="field-input">
+                        </div>
+                        <div>
+                            <label class="field-label-sm mb-1">Sample Output</label>
+                            <input id="rec-sample-output" type="text" placeholder="e.g. 3" class="field-input">
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-between pt-2">
+                        <div class="flex items-center gap-3">
+                            <label class="field-label-sm">Preferred Language:</label>
+                            <select id="rec-language" class="field-input !w-auto !py-1.5 !px-3 text-[13px]">
+                                <option value="" selected>Auto-select best language</option>
+                                <option value="Python">Python</option>
+                                <option value="C++">C++</option>
+                                <option value="Java">Java</option>
+                                <option value="JavaScript">JavaScript</option>
+                                <option value="Go">Go</option>
+                            </select>
+                        </div>
+                        <button id="btn-analyze-problem" onclick="RecommendationUI.analyze()" class="cmd-btn cmd-primary !h-9 !px-5 text-[13px] font-semibold">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+                            Analyze Problem
                         </button>
-                        <button onclick="RecommendationUI.downloadReport()" class="cmd-btn cmd-primary text-xs">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                            Download Report
-                        </button>
                     </div>
                 </div>
 
-                <!-- Key Metrics Grid -->
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 font-mono text-xs">
-                    <div class="p-3 rounded-xl bg-surface-1 border border-border-0">
-                        <span class="text-text-3 text-2xs uppercase block">Data Structure</span>
-                        <span id="rec-res-ds" class="font-bold text-white mt-1 block truncate">Hash Map</span>
+                <!-- Skeleton Loader -->
+                <div id="rec-skeleton" class="hidden panel p-6 space-y-4">
+                    <div class="h-6 w-1/3 skeleton"></div>
+                    <div class="grid grid-cols-4 gap-4">
+                        <div class="h-16 skeleton"></div><div class="h-16 skeleton"></div><div class="h-16 skeleton"></div><div class="h-16 skeleton"></div>
                     </div>
-                    <div class="p-3 rounded-xl bg-surface-1 border border-border-0">
-                        <span class="text-text-3 text-2xs uppercase block">Language</span>
-                        <span id="rec-res-lang" class="font-bold text-cyan-0 mt-1 block">Python</span>
+                    <div class="h-48 skeleton"></div>
+                </div>
+
+                <!-- Result Report -->
+                <div id="rec-report" class="hidden panel p-6 space-y-5">
+                    <!-- Header -->
+                    <div class="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-border-0">
+                        <div>
+                            <span id="rec-res-category" class="inline-flex items-center px-3 py-1 rounded-full text-[12px] font-medium bg-green-1/20 text-green-0 border border-green-1/30">Dynamic Programming</span>
+                            <h3 id="rec-res-algorithm" class="text-[18px] font-semibold text-text-0 mt-2 tracking-tight">Optimal Approach</h3>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button id="btn-copy-rec-code" onclick="RecommendationUI.copyCode()" class="cmd-btn cmd-ghost text-[12px]">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                                Copy Code
+                            </button>
+                            <button onclick="RecommendationUI.downloadReport()" class="cmd-btn cmd-ghost text-[12px]">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                Download
+                            </button>
+                        </div>
                     </div>
-                    <div class="p-3 rounded-xl bg-surface-1 border border-border-0">
-                        <span class="text-text-3 text-2xs uppercase block">Time Complexity</span>
-                        <span id="rec-res-time" class="font-bold text-green-0 mt-1 block">O(N)</span>
+
+                    <!-- Key Metrics -->
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div class="p-3 bg-surface-2 rounded-lg border border-border-0">
+                            <span class="text-text-1 text-[11px] uppercase tracking-wider block">Data Structure</span>
+                            <span id="rec-res-ds" class="font-semibold text-text-0 text-[13px] mt-1 block truncate font-mono">Hash Map</span>
+                        </div>
+                        <div class="p-3 bg-surface-2 rounded-lg border border-border-0">
+                            <span class="text-text-1 text-[11px] uppercase tracking-wider block">Language</span>
+                            <span id="rec-res-lang" class="font-semibold text-blue-0 text-[13px] mt-1 block font-mono">Python</span>
+                        </div>
+                        <div class="p-3 bg-surface-2 rounded-lg border border-border-0">
+                            <span class="text-text-1 text-[11px] uppercase tracking-wider block">Time</span>
+                            <span id="rec-res-time" class="font-semibold text-green-0 text-[13px] mt-1 block font-mono">O(N)</span>
+                        </div>
+                        <div class="p-3 bg-surface-2 rounded-lg border border-border-0">
+                            <span class="text-text-1 text-[11px] uppercase tracking-wider block">Space</span>
+                            <span id="rec-res-space" class="font-semibold text-text-0 text-[13px] mt-1 block font-mono">O(N)</span>
+                        </div>
                     </div>
-                    <div class="p-3 rounded-xl bg-surface-1 border border-border-0">
-                        <span class="text-text-3 text-2xs uppercase block">Space Complexity</span>
-                        <span id="rec-res-space" class="font-bold text-violet-0 mt-1 block">O(N)</span>
+
+                    <!-- Code -->
+                    <div>
+                        <h4 class="text-[11px] font-semibold text-text-1 uppercase tracking-wider mb-2">Reference Implementation</h4>
+                        <pre id="rec-res-code" class="bg-canvas p-4 rounded-lg border border-border-0 font-mono text-[13px] text-green-0 overflow-x-auto leading-relaxed thin-scroll select-text"></pre>
+                    </div>
+
+                    <!-- Explanation -->
+                    <div>
+                        <h4 class="text-[11px] font-semibold text-text-1 uppercase tracking-wider mb-2">Algorithm Walkthrough</h4>
+                        <div id="rec-res-explanation" class="text-[13px] text-text-0 leading-relaxed bg-surface-2 p-4 rounded-lg border border-border-0"></div>
+                    </div>
+
+                    <!-- Alternatives -->
+                    <div>
+                        <h4 class="text-[11px] font-semibold text-text-1 uppercase tracking-wider mb-3">Alternative Approaches</h4>
+                        <div id="rec-res-alternatives" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
                     </div>
                 </div>
 
-                <!-- Optimized Code Container -->
-                <div>
-                    <h4 class="text-xs font-semibold text-text-2 uppercase tracking-wider mb-2">Optimized Production Solution</h4>
-                    <pre id="rec-res-code" class="bg-surface-0 p-4 rounded-xl border border-border-0 font-mono text-xs text-cyan-0 overflow-x-auto leading-relaxed thin-scroll select-text"></pre>
+                <!-- Empty State -->
+                <div id="rec-empty-state" class="py-16 text-center">
+                    <div class="w-12 h-12 rounded-full bg-surface-2 flex items-center justify-center mx-auto mb-3">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-text-3"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    </div>
+                    <p class="text-[14px] font-medium text-text-1 mb-1">Ready for Analysis</p>
+                    <p class="text-[12px] text-text-3">Fill in your problem statement above and click "Analyze Problem".</p>
                 </div>
-
-                <!-- Step-by-Step Explanation -->
-                <div>
-                    <h4 class="text-xs font-semibold text-text-2 uppercase tracking-wider mb-2">Detailed Logic Breakdown</h4>
-                    <div id="rec-res-explanation" class="text-xs text-text-1 leading-relaxed bg-surface-1 p-4 rounded-xl border border-border-0"></div>
-                </div>
-
-                <!-- Alternative Approaches -->
-                <div>
-                    <h4 class="text-xs font-semibold text-text-2 uppercase tracking-wider mb-3">Alternative Algorithmic Approaches</h4>
-                    <div id="rec-res-alternatives" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
-                </div>
-            </div>
-
-            <!-- Empty State -->
-            <div id="rec-empty-state" class="py-16 text-center text-text-3">
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="mx-auto mb-3 opacity-40"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                <p class="text-sm font-medium text-text-2 mb-1">Ready for Problem Analysis</p>
-                <p class="text-xs">Fill in your problem statement above and click "Analyze Problem" to generate recommendation.</p>
             </div>
         </section>
 
 
         <!-- ====================================================================
-             3. SOLUTION EVALUATION IDE VIEW (#evaluation)
+             3. SOLUTION EVALUATION IDE VIEW
              ==================================================================== -->
         <section id="view-evaluation" class="h-full flex min-w-0 hidden">
-            <!-- Sidebar -->
-            <aside id="sidebar" class="w-56 bg-surface-1 border-r border-border-0 flex flex-col">
-                <div class="p-2.5 border-b border-border-0">
-                    <button id="btn-new-session" class="w-full h-8 rounded-md text-xs font-medium transition-all duration-150 flex items-center justify-center gap-1.5 bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 hover:border-accent/30 active:scale-[0.98]" onclick="NewSessionModal.open()">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <!-- Left Rail: Sessions -->
+            <aside id="sidebar" class="w-[260px] bg-surface-1 border-r border-border-0 flex flex-col shrink-0">
+                <div class="p-3 border-b border-border-0">
+                    <button id="btn-new-session" class="w-full h-8 rounded-md text-[13px] font-medium transition-all duration-150 flex items-center justify-center gap-1.5 bg-green-1 text-white hover:bg-green-2 active:scale-[0.98]" onclick="NewSessionModal.open()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                         New Session
                     </button>
                 </div>
 
-                <div class="px-2.5 py-1.5 border-b border-border-0">
-                    <select id="sidebar-problem-filter" class="w-full bg-surface-2 border border-border-0 rounded text-2xs text-text-2 py-1 px-2 focus:outline-none focus:border-accent/40 appearance-none cursor-pointer" onchange="App.filterSessions(this.value)">
+                <div class="px-3 py-2 border-b border-border-0">
+                    <select id="sidebar-problem-filter" class="w-full bg-surface-2 border border-line rounded-md text-[12px] text-text-1 py-1.5 px-2 focus:outline-none focus:border-blue-0/40 appearance-none cursor-pointer" onchange="App.filterSessions(this.value)">
                         <option value="all">All Problems</option>
                     </select>
                 </div>
 
                 <div id="session-list" class="flex-1 overflow-y-auto thin-scroll">
                     <div id="session-list-empty" class="flex flex-col items-center justify-center h-full px-4">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="text-text-3 mb-3"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-                        <p class="text-text-2 text-2xs">No sessions yet</p>
+                        <div class="w-10 h-10 rounded-full bg-surface-2 flex items-center justify-center mb-3">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-text-3"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        </div>
+                        <p class="text-text-1 text-[13px] font-medium mb-1">No sessions yet</p>
+                        <p class="text-text-3 text-[11px] text-center">Create a session to begin evaluation.</p>
                     </div>
                 </div>
             </aside>
 
-            <!-- Center Panel: Editor + Bottom -->
+            <!-- Center Panel: Editor -->
             <main id="center-panel" class="flex-1 flex flex-col min-w-0">
-                <div id="editor-tabs" class="h-8 bg-surface-2 border-b border-border-0 flex items-end px-1 gap-0">
+                <div id="editor-tabs" class="h-9 bg-surface-2 border-b border-border-0 flex items-end px-1 gap-0">
                     <button id="tab-python" class="ed-tab active" onclick="MonacoSetup.switchLanguage('python')" data-lang="python">
                         <span class="ed-tab-dot bg-[#3572A5]"></span>main.py
                     </button>
@@ -371,29 +408,29 @@
 
                 <div id="editor-container" class="flex-1 min-h-0"></div>
 
-                <div id="bottom-panel" class="h-48 min-h-[80px] bg-surface-2 border-t border-border-0 flex flex-col">
-                    <div class="h-7 border-b border-border-0 flex items-center px-1 gap-0">
+                <div id="bottom-panel" class="h-60 min-h-[80px] bg-surface-2 border-t border-border-0 flex flex-col">
+                    <div class="h-8 border-b border-border-0 flex items-center px-1 gap-0">
                         <button class="btm-tab active" data-panel="problems" onclick="App.switchBottomTab('problems')">Problems</button>
                         <button class="btm-tab" data-panel="output" onclick="App.switchBottomTab('output')">Output</button>
                         <button class="btm-tab" data-panel="test-results" onclick="App.switchBottomTab('test-results')">Tests</button>
                     </div>
                     <div class="flex-1 overflow-y-auto thin-scroll p-3">
                         <div id="panel-problems" class="btm-content active">
-                            <p class="text-text-2 text-xs">No diagnostics. Write code and submit.</p>
+                            <p class="text-text-1 text-[13px]">No diagnostics. Write code and submit.</p>
                         </div>
                         <div id="panel-output" class="btm-content hidden">
-                            <pre id="output-content" class="text-text-2 text-xs font-mono whitespace-pre-wrap leading-relaxed">No output.</pre>
+                            <pre id="output-content" class="text-text-1 text-[13px] font-mono whitespace-pre-wrap leading-relaxed">No output.</pre>
                         </div>
                         <div id="panel-test-results" class="btm-content hidden">
-                            <p class="text-text-2 text-xs">Submit code to generate and execute test cases.</p>
+                            <p class="text-text-1 text-[13px]">Submit code to generate and execute test cases.</p>
                         </div>
                     </div>
                 </div>
 
-                <div id="action-bar" class="h-10 bg-surface-1 border-t border-border-0 flex items-center justify-between px-3">
+                <div id="action-bar" class="h-11 bg-surface-1 border-t border-border-0 flex items-center justify-between px-3">
                     <div class="flex items-center gap-2">
-                        <button id="btn-dry-run" class="cmd-btn cmd-secondary" onclick="SessionView.dryRun()">
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+                        <button id="btn-dry-run" class="cmd-btn cmd-ghost" onclick="SessionView.dryRun()">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
                             Run
                         </button>
                         <button id="btn-submit" class="cmd-btn cmd-primary" onclick="SessionView.submit()">
@@ -402,27 +439,25 @@
                     </div>
                     <div class="flex items-center gap-2">
                         <button id="btn-export-pdf" class="cmd-btn cmd-ghost hidden" onclick="SessionView.exportPdf()">
-                            Export PDF Report
+                            Export PDF
                         </button>
                     </div>
                 </div>
             </main>
 
-            <!-- Right Panel: Analysis Feed -->
-            <aside id="right-panel" class="w-[360px] bg-surface-1 border-l border-border-0 flex flex-col">
+            <!-- Right Panel: Analysis -->
+            <aside id="right-panel" class="w-[360px] bg-surface-1 border-l border-border-0 flex flex-col shrink-0">
                 <div id="problem-header" class="px-4 py-3 border-b border-border-0">
-                    <div class="flex items-center justify-between mb-1.5">
-                        <span class="text-2xs font-semibold text-text-2 uppercase tracking-widest">Problem Statement</span>
-                    </div>
-                    <div id="problem-description" class="text-xs text-text-1 max-h-[200px] overflow-y-auto thin-scroll leading-relaxed">
-                        <p class="text-text-2 italic">Create a session to begin evaluation.</p>
+                    <span class="text-[11px] font-semibold text-text-1 uppercase tracking-widest block mb-2">Problem Statement</span>
+                    <div id="problem-description" class="text-[13px] text-text-1 max-h-[200px] overflow-y-auto thin-scroll leading-relaxed">
+                        <p class="text-text-3 italic">Create a session to begin evaluation.</p>
                     </div>
                 </div>
 
                 <div id="chat-thread" class="flex-1 overflow-y-auto thin-scroll px-4 py-3 space-y-3">
                     <div class="feed-card">
-                        <p class="text-xs text-text-1">Welcome to <span class="font-semibold text-white">Solution Evaluation</span>.</p>
-                        <p class="text-xs text-text-2 mt-1">Submit your code to execute against verified AI-generated test cases and receive a score breakdown.</p>
+                        <p class="text-[13px] text-text-1">Welcome to <span class="font-semibold text-text-0">Solution Evaluation</span>.</p>
+                        <p class="text-[12px] text-text-3 mt-1">Submit your code to execute against verified AI-generated test cases and receive a score breakdown.</p>
                     </div>
                 </div>
             </aside>
@@ -430,65 +465,84 @@
 
 
         <!-- ====================================================================
-             4. SHARED HISTORY VIEW (#history)
+             4. HISTORY VIEW
              ==================================================================== -->
-        <section id="view-history" class="h-full overflow-y-auto thin-scroll p-8 max-w-6xl mx-auto hidden space-y-6">
-            <div class="flex flex-wrap items-center justify-between gap-4 border-b border-border-0 pb-4">
-                <div>
-                    <h2 class="text-2xl font-extrabold text-white flex items-center gap-2">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                        Platform Analysis History
-                    </h2>
-                    <p class="text-text-2 text-xs mt-1">Browse, search, filter, export, or delete previous recommendations and evaluations.</p>
-                </div>
-                <button onclick="HistoryUI.exportAllJson()" class="cmd-btn cmd-secondary text-xs">
-                    Export All JSON
-                </button>
-            </div>
-
-            <!-- Controls: Tabs + Search -->
-            <div class="flex flex-wrap items-center justify-between gap-4">
-                <div class="flex items-center gap-1 border-b border-border-0">
-                    <button id="hist-tab-rec" class="hist-tab active-tab" onclick="HistoryUI.setTab('recommendation')">
-                        Recommendation History
-                    </button>
-                    <button id="hist-tab-eval" class="hist-tab" onclick="HistoryUI.setTab('evaluation')">
-                        Evaluation History
+        <section id="view-history" class="h-full overflow-y-auto thin-scroll hidden">
+            <div class="max-w-5xl mx-auto px-6 md:px-10 py-8 space-y-6">
+                <div class="flex flex-wrap items-center justify-between gap-4 border-b border-border-0 pb-5">
+                    <div>
+                        <h2 class="text-[22px] font-semibold text-text-0 tracking-[-0.02em]">History</h2>
+                        <p class="text-text-1 text-[14px] mt-1">Browse, search, and export previous recommendations and evaluations.</p>
+                    </div>
+                    <button onclick="HistoryUI.exportAllJson()" class="cmd-btn cmd-ghost text-[13px]">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        Export All JSON
                     </button>
                 </div>
 
-                <div class="flex items-center gap-2 w-full md:w-auto">
-                    <input id="hist-search" type="text" placeholder="Search history..." onkeyup="if(event.key==='Enter') HistoryUI.load()" class="field-input !w-64 text-xs">
-                    <button onclick="HistoryUI.load()" class="cmd-btn cmd-primary text-xs">Search</button>
+                <!-- Controls -->
+                <div class="flex flex-wrap items-center justify-between gap-4">
+                    <div class="flex items-center gap-1 border-b border-border-0">
+                        <button id="hist-tab-rec" class="hist-tab active-tab" onclick="HistoryUI.setTab('recommendation')">
+                            Recommendations
+                        </button>
+                        <button id="hist-tab-eval" class="hist-tab" onclick="HistoryUI.setTab('evaluation')">
+                            Evaluations
+                        </button>
+                    </div>
+                    <div class="flex items-center gap-2 w-full md:w-auto">
+                        <input id="hist-search" type="text" placeholder="Search history..." onkeyup="if(event.key==='Enter') HistoryUI.load()" class="field-input !w-64 text-[13px]">
+                        <button onclick="HistoryUI.load()" class="cmd-btn cmd-primary text-[13px]">Search</button>
+                    </div>
                 </div>
-            </div>
 
-            <!-- History List Grid -->
-            <div id="hist-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+                <!-- History List -->
+                <div id="hist-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+            </div>
         </section>
 
 
         <!-- ====================================================================
-             5. ABOUT VIEW (#about)
+             5. ABOUT VIEW
              ==================================================================== -->
-        <section id="view-about" class="h-full overflow-y-auto thin-scroll p-8 max-w-4xl mx-auto hidden space-y-8">
-            <div class="border-b border-border-0 pb-4">
-                <h2 class="text-2xl font-extrabold text-white">About Verdict AI</h2>
-                <p class="text-text-2 text-xs mt-1">An integrated dual-module AI platform for programmers.</p>
-            </div>
+        <section id="view-about" class="h-full overflow-y-auto thin-scroll hidden">
+            <div class="max-w-3xl mx-auto px-6 md:px-10 py-8 space-y-6">
+                <div class="border-b border-border-0 pb-5">
+                    <h2 class="text-[22px] font-semibold text-text-0 tracking-[-0.02em]">About Verdict</h2>
+                    <p class="text-text-1 text-[14px] mt-1">An integrated dual-module AI platform for programmers.</p>
+                </div>
 
-            <div class="glass-card p-6 rounded-2xl border border-border-0 space-y-4 text-xs text-text-1 leading-relaxed">
-                <h3 class="text-base font-bold text-white">Mission</h3>
-                <p>
-                    Verdict empowers developers at both stages of algorithm design: finding the best algorithmic approach before coding, and thoroughly verifying code correctness and complexity after implementation.
-                </p>
+                <div class="panel p-6 space-y-5 text-[14px] text-text-1 leading-relaxed">
+                    <h3 class="text-[16px] font-semibold text-text-0">Mission</h3>
+                    <p>
+                        Verdict empowers developers at both stages of algorithm design: finding the best algorithmic approach before coding, and thoroughly verifying code correctness and complexity after implementation.
+                    </p>
 
-                <h3 class="text-base font-bold text-white pt-2">Key Principles</h3>
-                <ul class="space-y-2 font-mono">
-                    <li class="flex items-center gap-2"><span class="text-accent">•</span> Independent dual modules sharing robust backend microservices.</li>
-                    <li class="flex items-center gap-2"><span class="text-accent">•</span> Verified code execution using real sandboxed execution.</li>
-                    <li class="flex items-center gap-2"><span class="text-accent">•</span> Strict JSON structure validation with retry logic.</li>
-                </ul>
+                    <h3 class="text-[16px] font-semibold text-text-0 pt-2">Key Principles</h3>
+                    <ul class="space-y-2">
+                        <li class="flex items-start gap-2"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-green-0 mt-0.5 shrink-0"><path d="M9 12l2 2 4-4"/></svg> Independent dual modules sharing robust backend microservices.</li>
+                        <li class="flex items-start gap-2"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-green-0 mt-0.5 shrink-0"><path d="M9 12l2 2 4-4"/></svg> Verified code execution using real sandboxed execution.</li>
+                        <li class="flex items-start gap-2"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-green-0 mt-0.5 shrink-0"><path d="M9 12l2 2 4-4"/></svg> Strict JSON structure validation with retry logic.</li>
+                    </ul>
+
+                    <h3 class="text-[16px] font-semibold text-text-0 pt-2">Pipeline Architecture</h3>
+                    <pre class="bg-canvas p-4 rounded-lg border border-border-0 font-mono text-[12px] text-text-1 overflow-x-auto leading-relaxed">
+┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
+│ Dry Run  │───▶│   Test   │───▶│ Sandboxed│───▶│  Score   │
+│ (Piston) │    │   Gen    │    │   Exec   │    │  Engine  │
+└──────────┘    │ (Gemini) │    │ (Piston) │    │ (6-sig)  │
+                └──────────┘    └──────────┘    └──────────┘</pre>
+
+                    <h3 class="text-[16px] font-semibold text-text-0 pt-2">Tech Stack</h3>
+                    <dl class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 text-[13px]">
+                        <div class="flex gap-2"><dt class="text-text-1 font-medium min-w-[80px]">Backend</dt><dd class="text-text-0 font-mono">FastAPI + SQLAlchemy</dd></div>
+                        <div class="flex gap-2"><dt class="text-text-1 font-medium min-w-[80px]">AI</dt><dd class="text-text-0 font-mono">Gemini 2.0 / Groq</dd></div>
+                        <div class="flex gap-2"><dt class="text-text-1 font-medium min-w-[80px]">Sandbox</dt><dd class="text-text-0 font-mono">Piston API</dd></div>
+                        <div class="flex gap-2"><dt class="text-text-1 font-medium min-w-[80px]">Database</dt><dd class="text-text-0 font-mono">SQLite (async)</dd></div>
+                        <div class="flex gap-2"><dt class="text-text-1 font-medium min-w-[80px]">Frontend</dt><dd class="text-text-0 font-mono">SPA + Monaco Editor</dd></div>
+                        <div class="flex gap-2"><dt class="text-text-1 font-medium min-w-[80px]">Charts</dt><dd class="text-text-0 font-mono">Chart.js 4</dd></div>
+                    </dl>
+                </div>
             </div>
         </section>
 
@@ -501,7 +555,7 @@
     <div id="hist-detail-modal" class="modal-overlay hidden">
         <div class="modal-box w-[680px]">
             <div class="modal-head">
-                <span class="text-sm font-semibold text-white">History Record Details</span>
+                <span class="text-[14px] font-semibold text-text-0">History Record Details</span>
                 <button class="modal-x" onclick="HistoryUI.closeModal()">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
@@ -515,9 +569,9 @@
 
     <!-- NEW SESSION MODAL -->
     <div id="new-session-modal" class="modal-overlay hidden">
-        <div class="modal-box w-[440px]">
+        <div class="modal-box w-[480px]">
             <div class="modal-head">
-                <span class="text-sm font-semibold text-text-0">New Evaluation Session</span>
+                <span class="text-[14px] font-semibold text-text-0">New Evaluation Session</span>
                 <button class="modal-x" onclick="NewSessionModal.close()">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
@@ -525,7 +579,7 @@
             <div class="modal-body space-y-5">
                 <div>
                     <label class="field-label">Language</label>
-                    <div class="flex gap-1.5 mt-1.5" id="lang-selector">
+                    <div class="flex gap-2 mt-2" id="lang-selector">
                         <button class="lang-pill active" data-lang="python" onclick="NewSessionModal.selectLanguage('python')">
                             <span class="lang-dot bg-[#3572A5]"></span>Python
                         </button>
@@ -540,7 +594,7 @@
 
                 <div>
                     <label class="field-label">Problem</label>
-                    <select id="modal-problem-select" class="field-input mt-1.5" onchange="NewSessionModal.onProblemChange(this.value)">
+                    <select id="modal-problem-select" class="field-input mt-2" onchange="NewSessionModal.onProblemChange(this.value)">
                         <option value="new">+ New Problem</option>
                     </select>
                 </div>
@@ -558,21 +612,21 @@
 
                 <div>
                     <label class="field-label">Label</label>
-                    <input id="modal-submission-label" type="text" placeholder="e.g., Attempt 1" class="field-input mt-1.5">
+                    <input id="modal-submission-label" type="text" placeholder="e.g., Attempt 1" class="field-input mt-2">
                 </div>
 
                 <div>
                     <label class="field-label">Evaluation Profile</label>
-                    <select id="modal-profile-select" class="field-input mt-1.5" onchange="NewSessionModal.onProfileChange(this.value)">
+                    <select id="modal-profile-select" class="field-input mt-2" onchange="NewSessionModal.onProfileChange(this.value)">
                         <option value="">Loading...</option>
                     </select>
                 </div>
 
-                <div id="custom-profile-panel" class="hidden border border-border-0 rounded-lg p-3 bg-surface-0/60"></div>
+                <div id="custom-profile-panel" class="hidden border border-line rounded-lg p-3 bg-canvas/60"></div>
             </div>
             <div class="modal-foot">
                 <button class="cmd-btn cmd-secondary" onclick="NewSessionModal.close()">Cancel</button>
-                <button id="btn-create-session" class="cmd-btn cmd-primary" onclick="NewSessionModal.create()">Create</button>
+                <button id="btn-create-session" class="cmd-btn cmd-primary" onclick="NewSessionModal.create()">Create Session</button>
             </div>
         </div>
     </div>
@@ -581,7 +635,7 @@
     <div id="leaderboard-modal" class="modal-overlay hidden">
         <div class="modal-box w-[680px]">
             <div class="modal-head">
-                <span class="text-sm font-semibold text-text-0">Leaderboard</span>
+                <span class="text-[14px] font-semibold text-text-0">Leaderboard</span>
                 <button class="modal-x" onclick="App.closeLeaderboard()">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
@@ -593,7 +647,7 @@
                     </select>
                 </div>
                 <div id="leaderboard-content" class="overflow-x-auto">
-                    <p class="text-text-2 text-xs text-center py-10">Choose a problem above.</p>
+                    <p class="text-text-1 text-[13px] text-center py-10">Choose a problem above.</p>
                 </div>
             </div>
             <div class="modal-foot">
