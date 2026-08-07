@@ -91,19 +91,43 @@ const MonacoSetup = {
                 const container = document.getElementById(containerId);
                 const code = initialCode || BOILERPLATES[language] || '';
 
-                // Create the editor instance with VS Code-like settings
+                // Define custom Verdict dark theme matching Compiler Ledger design tokens
+                monaco.editor.defineTheme('verdict-dark', {
+                    base: 'vs-dark',
+                    inherit: true,
+                    rules: [
+                        { token: '', background: '0d0e0c' },
+                        { token: 'comment', foreground: '52564a', fontStyle: 'italic' },
+                        { token: 'keyword', foreground: '5ddc7a', fontStyle: 'bold' },
+                        { token: 'string', foreground: 'e8e6df' },
+                        { token: 'number', foreground: '5ddc7a' },
+                    ],
+                    colors: {
+                        'editor.background': '#0d0e0c',
+                        'editor.foreground': '#e8e6df',
+                        'editor.lineHighlightBackground': '#16180f',
+                        'editorCursor.foreground': '#5ddc7a',
+                        'editorWhitespace.foreground': '#2b2f22',
+                        'editorIndentGuide.background': '#1c1f16',
+                        'editorIndentGuide.activeBackground': '#2b2f22',
+                        'editorLineNumber.foreground': '#52564a',
+                        'editorLineNumber.activeForeground': '#e8e6df',
+                    }
+                });
+
+                // Create the editor instance
                 editorInstance = monaco.editor.create(container, {
                     value: code,
                     language: MONACO_LANG_MAP[language] || 'python',
-                    theme: 'vs-dark',                          // Dark theme
-                    fontSize: 14,
-                    fontFamily: "'JetBrains Mono', 'Consolas', monospace",
+                    theme: 'verdict-dark',
+                    fontSize: 13,
+                    fontFamily: "'IBM Plex Mono', 'Consolas', monospace",
                     fontLigatures: true,
-                    minimap: { enabled: true, scale: 1 },      // Show minimap
+                    minimap: { enabled: true, scale: 1 },
                     scrollBeyondLastLine: false,
-                    automaticLayout: true,                     // Auto-resize with container
+                    automaticLayout: true,
                     lineNumbers: 'on',
-                    glyphMargin: true,                         // Enable gutter for markers
+                    glyphMargin: true,
                     folding: true,
                     wordWrap: 'off',
                     renderLineHighlight: 'line',
@@ -217,11 +241,11 @@ const MonacoSetup = {
                 range: new monaco.Range(line, 1, line, 1),
                 options: {
                     isWholeLine: true,
-                    className: classes.line,       // Red/yellow line background
-                    glyphMarginClassName: classes.glyph, // Red/yellow dot in gutter
+                    className: classes.line,
+                    glyphMarginClassName: classes.glyph,
                     glyphMarginHoverMessage: { value: message },
                     overviewRuler: {
-                        color: severity === 'error' ? '#f85149' : '#d29922',
+                        color: severity === 'error' ? '#e0563f' : '#d9a441',
                         position: monaco.editor.OverviewRulerLane.Full,
                     },
                 },
@@ -282,32 +306,26 @@ const MonacoSetup = {
 };
 
 // Register custom CSS for error line decorations
-// This is done via a <style> tag because Monaco's decoration CSS classes
-// need to be in the document head
 const decorationStyles = document.createElement('style');
 decorationStyles.textContent = `
-    /* Red background for error lines */
     .errorLineDecoration {
-        background: rgba(248, 81, 73, 0.15) !important;
-        border-left: 3px solid #f85149 !important;
+        background: rgba(224, 86, 63, 0.15) !important;
+        border-left: 3px solid #e0563f !important;
     }
-    /* Red dot in the gutter margin */
     .errorGlyphMargin {
-        background: #f85149;
+        background: #e0563f;
         border-radius: 50%;
         width: 8px !important;
         height: 8px !important;
         margin-left: 4px;
         margin-top: 6px;
     }
-    /* Yellow background for warning lines */
     .warningLineDecoration {
-        background: rgba(210, 153, 34, 0.15) !important;
-        border-left: 3px solid #d29922 !important;
+        background: rgba(217, 164, 65, 0.15) !important;
+        border-left: 3px solid #d9a441 !important;
     }
-    /* Yellow dot in the gutter margin */
     .warningGlyphMargin {
-        background: #d29922;
+        background: #d9a441;
         border-radius: 50%;
         width: 8px !important;
         height: 8px !important;

@@ -81,16 +81,17 @@ const App = {
 
                 for (const s of problemSessions) {
                     const isActive = s.session_id === this._currentSessionId;
-                    const statusColor = this._statusColor(s.status);
-                    const langColor = { python: '#3572A5', cpp: '#f34b7d', java: '#b07219' }[s.language] || '#6b7385';
+                    const langTag = { python: '[PY]', cpp: '[CPP]', java: '[JAVA]' }[s.language.toLowerCase()] || `[${s.language.substring(0,3).toUpperCase()}]`;
+                    const statusTag = { complete: '[OK]', failed: '[FAIL]', dry_run_failed: '[ERR]' }[s.status] || '[...]';
+                    const statusCls = s.status === 'complete' ? 'text-accent' : (s.status.includes('failed') ? 'text-fail' : 'text-warn');
+
                     html += `
                         <div class="sess-item ${isActive ? 'active' : ''}" data-session-id="${s.session_id}" onclick="App.openSession(${s.session_id})">
-                            <span class="lang-dot" style="background:${langColor}"></span>
                             <div class="flex-1 min-w-0">
-                                <div class="sess-title">${this._esc(s.submission_label)}</div>
-                                <div class="sess-meta">${s.language} &middot; ${this._fmtDate(s.created_at)}</div>
+                                <div class="sess-title font-mono"><span class="text-text-muted text-2xs mr-1">${langTag}</span>${this._esc(s.submission_label)}</div>
+                                <div class="sess-meta font-mono">${this._fmtDate(s.created_at)}</div>
                             </div>
-                            <span class="sess-dot" style="background:${statusColor}" title="${s.status}"></span>
+                            <span class="font-mono text-2xs ${statusCls}">${statusTag}</span>
                         </div>`;
                 }
             }

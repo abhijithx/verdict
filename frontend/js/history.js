@@ -71,51 +71,52 @@ const HistoryUI = {
         listContainer.innerHTML = this.items.map(item => {
             if (item.module === 'recommendation') {
                 return `
-                    <div class="glass-card p-4 rounded-xl border border-border-0 hover:border-accent/30 transition-all group flex flex-col justify-between gap-3">
+                    <div class="panel p-4 border border-line flex flex-col justify-between gap-3 font-mono">
                         <div>
                             <div class="flex items-center justify-between gap-2 mb-2">
-                                <span class="px-2 py-0.5 rounded text-2xs font-semibold bg-accent/15 text-accent border border-accent/20">${this.escapeHtml(item.category)}</span>
-                                <span class="text-2xs text-text-3 font-mono">${this.formatDate(item.timestamp)}</span>
+                                <span class="text-2xs font-semibold text-accent">[ ${this.escapeHtml(item.category || 'REC')} ]</span>
+                                <span class="text-2xs text-text-dim">${this.formatDate(item.timestamp)}</span>
                             </div>
-                            <h4 class="text-xs font-semibold text-text-0 group-hover:text-accent transition-colors line-clamp-2 mb-2">${this.escapeHtml(item.title)}</h4>
-                            <div class="flex items-center gap-2 text-2xs text-text-2">
-                                <span class="font-mono text-cyan-0">${this.escapeHtml(item.algorithm || 'N/A')}</span>
+                            <h4 class="text-xs font-bold text-text-primary mb-2">${this.escapeHtml(item.title)}</h4>
+                            <div class="flex items-center gap-2 text-2xs text-text-muted">
+                                <span>Alg: ${this.escapeHtml(item.algorithm || 'N/A')}</span>
                                 <span>•</span>
-                                <span class="font-mono text-violet-0">${this.escapeHtml(item.language || 'Python')}</span>
+                                <span>[${this.escapeHtml((item.language || 'Python').substring(0,3).toUpperCase())}]</span>
                             </div>
                         </div>
 
-                        <div class="pt-2 border-t border-border-0 flex items-center justify-between gap-2">
-                            <span class="text-2xs text-text-3 font-mono">${this.escapeHtml(item.complexity)}</span>
+                        <div class="pt-2 border-t border-line flex items-center justify-between gap-2">
+                            <span class="text-2xs text-text-muted font-mono">${this.escapeHtml(item.complexity)}</span>
                             <div class="flex items-center gap-1.5">
-                                <button class="px-2 py-1 rounded text-2xs font-medium bg-surface-3 text-text-1 hover:text-white hover:bg-accent/20 transition-all" onclick="HistoryUI.viewDetails('${item.id}')">View Details</button>
-                                <button class="px-2 py-1 rounded text-2xs font-medium bg-red-1/10 text-red-0 hover:bg-red-1/20 transition-all" onclick="HistoryUI.deleteItem('${item.id}')">Delete</button>
+                                <button class="cmd-btn cmd-secondary text-2xs !h-6 !px-2" onclick="HistoryUI.viewDetails('${item.id}')">View</button>
+                                <button class="cmd-btn cmd-ghost text-2xs text-fail !h-6 !px-2" onclick="HistoryUI.deleteItem('${item.id}')">Del</button>
                             </div>
                         </div>
                     </div>
                 `;
             } else {
-                const verdictClass = item.verdict === 'optimal' ? 'text-green-0 bg-green-1/15 border-green-1/20' : 'text-amber-0 bg-amber-0/15 border-amber-0/20';
+                const vc = { optimal: 'verdict-pass', needs_improvement: 'verdict-warn', incorrect: 'verdict-fail' }[item.verdict] || '';
+                const vl = { optimal: '[ OPTIMAL ]', needs_improvement: '[ NEEDS WORK ]', incorrect: '[ INCORRECT ]' }[item.verdict] || `[ ${(item.verdict || 'EVAL').toUpperCase()} ]`;
                 return `
-                    <div class="glass-card p-4 rounded-xl border border-border-0 hover:border-accent/30 transition-all group flex flex-col justify-between gap-3">
+                    <div class="panel p-4 border border-line flex flex-col justify-between gap-3 font-mono">
                         <div>
                             <div class="flex items-center justify-between gap-2 mb-2">
-                                <span class="px-2 py-0.5 rounded text-2xs font-semibold uppercase tracking-wider border ${verdictClass}">${this.escapeHtml(item.verdict || 'Evaluation')}</span>
-                                <span class="text-2xs text-text-3 font-mono">${this.formatDate(item.timestamp)}</span>
+                                <span class="verdict ${vc} text-2xs">${vl}</span>
+                                <span class="text-2xs text-text-dim">${this.formatDate(item.timestamp)}</span>
                             </div>
-                            <h4 class="text-xs font-semibold text-text-0 group-hover:text-accent transition-colors line-clamp-1 mb-1">${this.escapeHtml(item.title)}</h4>
-                            <p class="text-2xs text-text-2 line-clamp-2 mb-2">${this.escapeHtml(item.submission_label || 'Attempt')}</p>
+                            <h4 class="text-xs font-bold text-text-primary mb-1">${this.escapeHtml(item.title)}</h4>
+                            <p class="text-2xs text-text-muted mb-2 font-sans">${this.escapeHtml(item.submission_label || 'Attempt')}</p>
                             <div class="flex items-center gap-2 text-2xs">
-                                <span class="font-mono text-cyan-0">${this.escapeHtml(item.language)}</span>
-                                ${item.final_score !== null ? `<span class="px-1.5 py-0.5 rounded bg-accent/20 text-accent font-semibold font-mono">Score: ${item.final_score}/100</span>` : ''}
+                                <span class="text-text-muted">[${this.escapeHtml((item.language || '').substring(0,3).toUpperCase())}]</span>
+                                ${item.final_score !== null ? `<span class="text-accent font-bold">Score: ${item.final_score}/100</span>` : ''}
                             </div>
                         </div>
 
-                        <div class="pt-2 border-t border-border-0 flex items-center justify-between gap-2">
-                            <span class="text-2xs text-text-3 font-mono">${this.escapeHtml(item.complexity)}</span>
+                        <div class="pt-2 border-t border-line flex items-center justify-between gap-2">
+                            <span class="text-2xs text-text-muted font-mono">${this.escapeHtml(item.complexity)}</span>
                             <div class="flex items-center gap-1.5">
-                                <button class="px-2 py-1 rounded text-2xs font-medium bg-surface-3 text-text-1 hover:text-white hover:bg-accent/20 transition-all" onclick="HistoryUI.viewDetails('${item.id}')">View Details</button>
-                                <button class="px-2 py-1 rounded text-2xs font-medium bg-red-1/10 text-red-0 hover:bg-red-1/20 transition-all" onclick="HistoryUI.deleteItem('${item.id}')">Delete</button>
+                                <button class="cmd-btn cmd-secondary text-2xs !h-6 !px-2" onclick="HistoryUI.viewDetails('${item.id}')">View</button>
+                                <button class="cmd-btn cmd-ghost text-2xs text-fail !h-6 !px-2" onclick="HistoryUI.deleteItem('${item.id}')">Del</button>
                             </div>
                         </div>
                     </div>
@@ -138,7 +139,7 @@ const HistoryUI = {
                             <span class="px-2 py-0.5 rounded text-2xs font-semibold bg-accent/20 text-accent uppercase">${detail.module}</span>
                             <h3 class="text-sm font-bold text-text-0 mt-1">${this.escapeHtml(detail.problem || detail.problem_title)}</h3>
                         </div>
-                        <button class="px-3 py-1 rounded text-2xs bg-accent text-white font-medium hover:bg-accent-dim transition-all" onclick="HistoryUI.exportDetailJson(${JSON.stringify(detail).replace(/"/g, '&quot;')})">Export JSON</button>
+                        <button id="btn-export-detail-json" class="px-3 py-1 rounded text-2xs bg-accent text-white font-medium hover:bg-accent-dim transition-all">Export JSON</button>
                     </div>
 
                     ${detail.module === 'recommendation' ? `
@@ -170,6 +171,11 @@ const HistoryUI = {
                     `}
                 </div>
             `;
+
+            const exportBtn = content.querySelector('#btn-export-detail-json');
+            if (exportBtn) {
+                exportBtn.addEventListener('click', () => this.exportDetailJson(detail));
+            }
 
             modal.classList.remove('hidden');
         } catch (err) {

@@ -126,12 +126,21 @@ async def run_pipeline(session_id: int):
             await _update_status(db, session_id, "generating_tests")
             print(f"[PIPELINE] Step 2: Generating test cases for session {session_id}")
 
-            first_response = await generate_test_cases(
-                code=session.code,
-                language=session.language,
-                problem_statement=problem.description,
-                history_summary=session.history_summary,
-            )
+            from pipeline.gemini_first import generate_test_cases, TestGenerationFailedError
+
+            try:
+                first_response = await generate_test_cases(
+                    code=session.code,
+                    language=session.language,
+                    problem_statement=problem.description,
+                    history_summary=session.history_summary,
+                )
+            except TestGenerationFailedError as e:
+                session.history_summary = f"Pipeline halted: {str(e)}"
+                await db.commit()
+                await _update_status(db, session_id, "failed")
+                print(f"[PIPELINE] Session {session_id} halted — test generation failed, no fallback test data used.")
+                return
 
             # Save generated test cases to the database
             db_test_cases = []

@@ -11,16 +11,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
 from schemas import RecommendationRequest, RecommendationResponse, AlternativeApproach
-from services.gemini_client import gemini_client
+from services.gemini_client import gemini_client, GeminiAPIError
 from services.history_service import history_service
 from services.logger import get_logger
 
 logger = get_logger("RecommendationRouter")
 
+from services.rate_limiter import check_ai_rate_limit
+
 router = APIRouter(prefix="/api/recommendation", tags=["recommendation"])
 
 
-@router.post("", response_model=RecommendationResponse)
+@router.post("", response_model=RecommendationResponse, dependencies=[Depends(check_ai_rate_limit)])
 async def get_solution_recommendation(
     request: RecommendationRequest,
     db: AsyncSession = Depends(get_db)
@@ -40,13 +42,16 @@ async def get_solution_recommendation(
     logger.info(f"Received recommendation request for language: {request.preferred_language}")
 
     # Generate recommendation via shared Gemini client
-    rec_data = await gemini_client.generate_recommendation(
-        problem=request.problem,
-        constraints=request.constraints,
-        sample_input=request.sample_input,
-        sample_output=request.sample_output,
-        preferred_language=request.preferred_language
-    )
+    try:
+        rec_data = await gemini_client.generate_recommendation(
+            problem=request.problem,
+            constraints=request.constraints,
+            sample_input=request.sample_input,
+            sample_output=request.sample_output,
+            preferred_language=request.preferred_language
+        )
+    except GeminiAPIError as e:
+        raise HTTPException(status_code=503, detail=str(e))
 
     # Save to history database table
     history_entry = await history_service.create_recommendation_entry(

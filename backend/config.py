@@ -18,9 +18,16 @@ class Settings:
     PROJECT_NAME: str = "Verdict AI Programming Analysis Platform"
     VERSION: str = "2.0.0"
     
+    # AI Provider Switch: 'gemini' or 'groq'
+    AI_PROVIDER: str = os.getenv("AI_PROVIDER", "gemini")
+    
     # Gemini API Configuration
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+    
+    # Groq API Configuration
+    GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
+    GROQ_MODEL: str = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
     
     # Piston Execution API Configuration
     PISTON_URL: str = os.getenv("PISTON_URL", "https://emkc.org/api/v2/piston/execute")

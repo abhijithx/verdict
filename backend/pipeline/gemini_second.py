@@ -1,13 +1,12 @@
 """
-gemini_second.py — Gemini AI "second" call: code analysis with real execution results.
+gemini_second.py — AI "second" call: code analysis with real execution results.
 
-Refactored to use shared PromptBuilder, JSONValidator, and Config.
+Refactored to use shared AI provider (supports Gemini + Groq).
 Receives verified execution results and produces complexity and quality analysis.
 """
 
 import json
 import asyncio
-import google.generativeai as genai
 from typing import Optional
 
 from config import settings
@@ -16,12 +15,10 @@ from schemas import (
 )
 from services.prompt_builder import PromptBuilder
 from services.json_validator import JSONValidator
+from services.ai_provider import call_ai, AIProviderError
 from services.logger import get_logger
 
 logger = get_logger("GeminiSecond")
-
-if settings.GEMINI_API_KEY:
-    genai.configure(api_key=settings.GEMINI_API_KEY)
 
 
 def _format_test_results_for_ai(test_cases, exec_results) -> list:
@@ -53,7 +50,7 @@ async def analyze_code(
     max_retries: int = 2
 ) -> GeminiSecondResponse:
     """
-    Call Gemini to analyze code with real execution results.
+    Call AI provider to analyze code with real execution results.
     """
     formatted_results = _format_test_results_for_ai(test_cases, exec_results)
 
@@ -65,25 +62,16 @@ async def analyze_code(
         history_summary=history_summary
     )
 
-    model = genai.GenerativeModel(
-        model_name=settings.GEMINI_MODEL,
-        system_instruction=PromptBuilder.EVALUATION_SYSTEM_INSTRUCTION
-    )
-
     last_error = None
 
     for attempt in range(max_retries + 1):
         try:
-            response = await asyncio.to_thread(
-                model.generate_content,
-                prompt,
-                generation_config=genai.GenerationConfig(
-                    response_mime_type="application/json",
-                    temperature=0.2,
-                )
+            raw_text = await call_ai(
+                system_instruction=PromptBuilder.EVALUATION_SYSTEM_INSTRUCTION,
+                prompt=prompt,
+                temperature=0.2
             )
 
-            raw_text = response.text.strip()
             is_valid, parsed_data, err_msg = JSONValidator.parse_and_validate(raw_text, expected_type="second")
 
             if is_valid and parsed_data:
@@ -92,9 +80,14 @@ async def analyze_code(
             last_error = err_msg or "Validation error"
             logger.warning(f"Attempt {attempt + 1} validation error: {last_error}")
 
+        except AIProviderError as e:
+            last_error = str(e)
+            logger.error(f"AI provider error (Attempt {attempt + 1}): {str(e)}")
+            if attempt < max_retries:
+                await asyncio.sleep(1)
         except Exception as e:
             last_error = str(e)
-            logger.error(f"Gemini second call error (Attempt {attempt + 1}): {str(e)}")
+            logger.error(f"AI second call error (Attempt {attempt + 1}): {str(e)}")
             if attempt < max_retries:
                 await asyncio.sleep(1)
 

@@ -23,10 +23,11 @@ class SessionStatus(str, Enum):
     """
     Pipeline status for a session. Progresses linearly:
     pending → generating_tests → executing → analyzing → complete
-    Can branch to dry_run_failed or failed at any stage.
+    Can branch to dry_run_failed, dry_run_passed, or failed at any stage.
     """
     PENDING = "pending"
     DRY_RUN_FAILED = "dry_run_failed"
+    DRY_RUN_PASSED = "dry_run_passed"
     GENERATING_TESTS = "generating_tests"
     EXECUTING = "executing"
     ANALYZING = "analyzing"
@@ -411,7 +412,7 @@ class RecommendationRequest(BaseModel):
     constraints: Optional[str] = Field(None, description="Optional problem constraints")
     sample_input: Optional[str] = Field(None, description="Optional sample input")
     sample_output: Optional[str] = Field(None, description="Optional sample output")
-    preferred_language: str = Field("Python", description="Preferred programming language")
+    preferred_language: Optional[str] = Field(None, description="Preferred programming language (None = auto-select best language)")
 
 
 class RecommendationResponse(BaseModel):

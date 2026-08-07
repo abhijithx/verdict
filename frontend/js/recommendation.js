@@ -15,7 +15,7 @@ const RecommendationUI = {
         const constraints = document.getElementById('rec-constraints')?.value.trim();
         const sampleInput = document.getElementById('rec-sample-input')?.value.trim();
         const sampleOutput = document.getElementById('rec-sample-output')?.value.trim();
-        const language = document.getElementById('rec-language')?.value || 'Python';
+        const language = document.getElementById('rec-language')?.value || null;
 
         if (!problem) {
             alert('Please enter a programming problem description.');
@@ -50,8 +50,23 @@ const RecommendationUI = {
 
         } catch (error) {
             console.error('[RecommendationUI] Error:', error);
-            alert(`Analysis failed: ${error.message}`);
-            if (emptyState) emptyState.classList.remove('hidden');
+            // Show inline error instead of browser alert
+            const report = document.getElementById('rec-report');
+            if (report) {
+                report.classList.remove('hidden');
+                report.innerHTML = `
+                    <div class="flex flex-col items-center justify-center py-12 text-center">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--red-0, #f44)" stroke-width="1.5" class="mb-4 opacity-60">
+                            <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
+                        </svg>
+                        <p class="text-sm font-semibold text-white mb-2">Analysis Failed</p>
+                        <p class="text-xs text-text-2 max-w-md leading-relaxed">${error.message}</p>
+                        <button onclick="document.getElementById('rec-report').classList.add('hidden'); document.getElementById('rec-empty-state').classList.remove('hidden');"
+                                class="mt-4 cmd-btn cmd-secondary text-xs">Dismiss</button>
+                    </div>
+                `;
+            }
+            if (emptyState) emptyState.classList.add('hidden');
         } finally {
             if (btn) {
                 btn.disabled = false;
@@ -68,10 +83,16 @@ const RecommendationUI = {
         const report = document.getElementById('rec-report');
         if (!report) return;
 
+        const userSelectedLang = document.getElementById('rec-language')?.value || null;
+        const isAiSelected = !userSelectedLang;
+        const badgeHtml = isAiSelected
+            ? `<span class="inline-block ml-1 px-1.5 py-0.5 text-[10px] font-mono font-semibold text-accent border border-accent uppercase tracking-wider">[ AI-SELECTED ]</span>`
+            : `<span class="inline-block ml-1 px-1.5 py-0.5 text-[10px] font-mono font-semibold text-text-muted border border-line uppercase tracking-wider">[ REQUESTED ]</span>`;
+
         document.getElementById('rec-res-category').textContent = data.category || 'Algorithm Strategy';
         document.getElementById('rec-res-algorithm').textContent = data.recommended_algorithm || 'Optimal Approach';
         document.getElementById('rec-res-ds').textContent = data.recommended_data_structure || 'Standard Structure';
-        document.getElementById('rec-res-lang').textContent = data.recommended_language || 'Python';
+        document.getElementById('rec-res-lang').innerHTML = `${this.escapeHtml(data.recommended_language || 'Python')} ${badgeHtml}`;
         document.getElementById('rec-res-time').textContent = data.time_complexity || 'O(N)';
         document.getElementById('rec-res-space').textContent = data.space_complexity || 'O(1)';
 
@@ -92,19 +113,19 @@ const RecommendationUI = {
         if (altsContainer) {
             if (data.alternative_approaches && data.alternative_approaches.length > 0) {
                 altsContainer.innerHTML = data.alternative_approaches.map(alt => `
-                    <div class="glass-card p-3 rounded-lg border border-border-0 hover:border-accent/30 transition-all">
+                    <div class="panel p-3 border border-line font-mono">
                         <div class="flex items-center justify-between mb-1">
-                            <span class="text-xs font-semibold text-accent">${this.escapeHtml(alt.name)}</span>
-                            <div class="flex gap-2 text-2xs">
-                                <span class="px-1.5 py-0.5 rounded bg-surface-3 text-cyan-0">Time: ${this.escapeHtml(alt.time_complexity)}</span>
-                                <span class="px-1.5 py-0.5 rounded bg-surface-3 text-violet-0">Space: ${this.escapeHtml(alt.space_complexity)}</span>
+                            <span class="text-xs font-bold text-accent">${this.escapeHtml(alt.name)}</span>
+                            <div class="flex gap-2 text-2xs text-text-muted">
+                                <span class="px-1 py-0.5 border border-line bg-surface-2">Time: ${this.escapeHtml(alt.time_complexity)}</span>
+                                <span class="px-1 py-0.5 border border-line bg-surface-2">Space: ${this.escapeHtml(alt.space_complexity)}</span>
                             </div>
                         </div>
-                        <p class="text-2xs text-text-2 leading-relaxed">${this.escapeHtml(alt.trade_offs)}</p>
+                        <p class="text-2xs text-text-muted leading-relaxed font-sans">${this.escapeHtml(alt.trade_offs)}</p>
                     </div>
                 `).join('');
             } else {
-                altsContainer.innerHTML = `<p class="text-2xs text-text-3 italic">No alternative approaches reported.</p>`;
+                altsContainer.innerHTML = `<p class="text-2xs text-text-dim italic font-mono">No alternative approaches reported.</p>`;
             }
         }
 

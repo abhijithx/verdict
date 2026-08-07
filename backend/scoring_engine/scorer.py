@@ -108,13 +108,34 @@ def normalize_complexity(complexity_str: str) -> str:
     return s
 
 
+def _compute_timing_score(exec_results, threshold_ms: float = 2000.0) -> int:
+    """Return 0-100 score based on average execution time relative to a threshold."""
+    if not exec_results:
+        return 100
+    times = []
+    for r in exec_results:
+        t = r.get("time_ms") if isinstance(r, dict) else getattr(r, "time_ms", None)
+        if t is not None:
+            times.append(t)
+    if not times:
+        return 100
+    avg_ms = sum(times) / len(times)
+    if avg_ms <= threshold_ms * 0.25:
+        return 100
+    if avg_ms <= threshold_ms * 0.5:
+        return 85
+    if avg_ms <= threshold_ms:
+        return 65
+    return 40
+
+
 def derive_signals(exec_results: list, second_response) -> dict:
     """
     Derive the 6 individual scoring signals from execution data and AI analysis.
     
     This function translates raw data into 0-100 scores for each dimension:
       - correctness_score:   tests_passed / tests_total × 100
-      - performance_score:   COMPLEXITY_SCORE_MAP[time_complexity]
+      - performance_score:   70% COMPLEXITY_SCORE_MAP + 30% measured execution timing
       - optimization_score:  100 if optimal, 60 if not
       - quality_score:       directly from AI (0-100)
       - readability_score:   directly from AI (0-100)
@@ -129,7 +150,7 @@ def derive_signals(exec_results: list, second_response) -> dict:
     """
     # --- Correctness Score ---
     # Straightforward: what fraction of test cases passed?
-    # This is the ONLY score derived purely from real execution data
+    # This is derived purely from real execution data
     if exec_results:
         tests_passed = sum(1 for r in exec_results if _get_passed(r))
         tests_total = len(exec_results)
@@ -138,7 +159,7 @@ def derive_signals(exec_results: list, second_response) -> dict:
         correctness_score = 0
 
     # --- Performance Score ---
-    # Look up the AI-reported time complexity in our score map
+    # Blend Big-O theoretical complexity map (70%) with measured execution timing (30%)
     time_complexity = _get_attr(second_response, "complexity", {})
     if isinstance(time_complexity, dict):
         time_str = time_complexity.get("time", "")
@@ -146,7 +167,9 @@ def derive_signals(exec_results: list, second_response) -> dict:
         time_str = getattr(time_complexity, "time", "")
     
     normalized = normalize_complexity(time_str)
-    performance_score = COMPLEXITY_SCORE_MAP.get(normalized, DEFAULT_COMPLEXITY_SCORE)
+    complexity_score = COMPLEXITY_SCORE_MAP.get(normalized, DEFAULT_COMPLEXITY_SCORE)
+    timing_score = _compute_timing_score(exec_results)
+    performance_score = round(0.70 * complexity_score + 0.30 * timing_score)
 
     # --- Optimization Score ---
     # Binary signal: is this the optimal known approach?

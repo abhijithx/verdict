@@ -101,7 +101,62 @@ async def create_session(
     }
 
 
-@router.post("/{session_id}/submit", response_model=dict)
+@router.post("/{session_id}/dry-run", response_model=DryRunResultResponse)
+async def dry_run_session(
+    session_id: int,
+    submission: SessionSubmit,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Runs ONLY the compile/runtime dry-run check via Piston — no Gemini calls,
+    no test generation, no scoring. Updates session.code and status='dry_run_failed'
+    or 'dry_run_passed' accordingly. Does NOT invoke run_pipeline.
+    """
+    result = await db.execute(
+        select(Session).where(Session.session_id == session_id)
+    )
+    session = result.scalars().first()
+    if not session:
+        raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+
+    active_statuses = {"generating_tests", "executing", "analyzing"}
+    if session.status in active_statuses:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Session pipeline is currently running ({session.status}). Wait for completion."
+        )
+
+    session.code = submission.code
+
+    from pipeline.piston_client import piston_client
+    from pipeline.error_parser import parse_error_line
+
+    dry_run_output = await piston_client.dry_run(submission.code, session.language)
+    passed = dry_run_output.get("passed", False)
+    stdout = dry_run_output.get("stdout")
+    stderr = dry_run_output.get("stderr")
+    error_line = parse_error_line(stderr, session.language) if stderr else None
+
+    dry_run_record = DryRunResult(
+        session_id=session_id,
+        passed=passed,
+        stdout=stdout,
+        stderr=stderr,
+        error_line=error_line
+    )
+    db.add(dry_run_record)
+
+    session.status = "dry_run_passed" if passed else "dry_run_failed"
+    await db.commit()
+    await db.refresh(dry_run_record)
+
+    return dry_run_record
+
+
+from services.rate_limiter import check_ai_rate_limit
+
+
+@router.post("/{session_id}/submit", response_model=dict, dependencies=[Depends(check_ai_rate_limit)])
 async def submit_session(
     session_id: int,
     submission: SessionSubmit,
@@ -133,12 +188,21 @@ async def submit_session(
     if not session:
         raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
 
-    # Don't allow re-submission while pipeline is running
-    active_statuses = {"generating_tests", "executing", "analyzing"}
-    if session.status in active_statuses:
+    # Atomic check & update: don't allow re-submission while pipeline is running
+    active_statuses = ["generating_tests", "executing", "analyzing"]
+    from sqlalchemy import update
+    res = await db.execute(
+        update(Session)
+        .where(
+            Session.session_id == session_id,
+            Session.status.notin_(active_statuses)
+        )
+        .values(status="pending")
+    )
+    if res.rowcount == 0:
         raise HTTPException(
             status_code=409,
-            detail=f"Session is currently {session.status}. Wait for completion."
+            detail=f"Session is busy or currently running ({session.status}). Wait for completion."
         )
 
     # For resubmissions: if session already has analysis, compress history

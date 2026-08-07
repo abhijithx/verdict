@@ -61,13 +61,25 @@ const SessionView = {
 
         MonacoSetup.clearMarkers();
         this._clearProblems();
-        this._addCard('user', 'Running compile check...');
+        this._addCard('user', 'Running fast dry-run compile check...');
+        this._showStatus('Compiling...');
 
         try {
-            await ApiClient.submitSession(this._currentSessionId, code);
-            this._startPolling();
+            const dr = await ApiClient.dryRunSession(this._currentSessionId, code);
+            this._hideStatus();
+
+            if (dr.passed) {
+                this._addCard('', '<span class="text-green-0 font-medium">✓ Dry-run passed.</span> Code compiled with zero errors.');
+                const p = document.getElementById('panel-problems');
+                if (p) p.innerHTML = '<p class="text-green-0 text-xs">✓ No compilation or runtime diagnostics found.</p>';
+                App.switchBottomTab('problems');
+            } else {
+                this._renderDryRunError(dr);
+            }
+            await App.refreshSidebar();
         } catch (e) {
-            this._addCard('', `Error: ${e.message}`);
+            this._hideStatus();
+            this._addCard('', `Dry-run check failed: ${e.message}`);
         }
     },
 
@@ -152,7 +164,8 @@ const SessionView = {
                     await App.refreshSidebar();
                 } else if (s.status === 'failed') {
                     this._stopPolling(); this._setLoading(false); this._hideStatus();
-                    this._addCard('', 'Pipeline failed. Check backend logs.');
+                    const reason = s.history_summary || 'Pipeline failed. Check backend logs.';
+                    this._addCard('', `<span class="text-red-0 font-medium">Pipeline Halted:</span> ${this._esc(reason)}`);
                     await App.refreshSidebar();
                 }
             } catch (e) { console.error('[POLL]', e); }
@@ -223,41 +236,52 @@ const SessionView = {
         this._addCard('', `<span class="font-semibold ${passed===total?'text-green-0':'text-amber-0'}">${passed}/${total} tests passed.</span> See Tests panel for details.`);
     },
 
+    renderAsciiBar(score, width = 16) {
+        const s = Math.max(0, Math.min(100, score || 0));
+        const filledLen = Math.round((s / 100) * width);
+        const emptyLen = width - filledLen;
+        return `[${'█'.repeat(filledLen)}${'░'.repeat(emptyLen)}] ${String(s).padStart(3, ' ')}`;
+    },
+
     _renderAnalysis(a, profile) {
         if (!a) return;
 
         const vc = { optimal:'verdict-pass', needs_improvement:'verdict-warn', incorrect:'verdict-fail' }[a.verdict] || 'verdict-warn';
-        const vl = { optimal:'Optimal', needs_improvement:'Needs Improvement', incorrect:'Incorrect' }[a.verdict] || a.verdict;
+        const vl = { optimal:'[ OPTIMAL ]', needs_improvement:'[ NEEDS WORK ]', incorrect:'[ INCORRECT ]' }[a.verdict] || `[ ${(a.verdict||'').toUpperCase()} ]`;
 
-        const scoreColor = s => s >= 80 ? '#4ade80' : s >= 60 ? '#6c8aef' : s >= 40 ? '#fbbf24' : '#f87171';
-        const bar = (label, score) => {
-            const s = score ?? 0;
-            return `<div class="score-bar-row"><span class="score-bar-lbl">${label}</span>
-                <div class="score-bar-bg"><div class="score-bar-fill" style="width:${s}%;background:${scoreColor(s)}"></div></div>
-                <span class="score-bar-val">${s}</span></div>`;
+        const asciiLine = (label, score) => {
+            const lbl = label.padEnd(13, ' ');
+            return `<div><span class="text-text-muted">${lbl}</span> <span class="text-accent">${this.renderAsciiBar(score)}</span></div>`;
         };
 
         let h = `<div class="feed-section-label">Analysis</div>
-            <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center justify-between mb-4 font-mono">
                 <span class="verdict ${vc}">${vl}</span>
-                <div class="text-right"><div class="text-xl font-bold" style="color:${scoreColor(a.final_score||0)}">${a.final_score??'--'}</div>
-                <div class="text-2xs text-text-3 uppercase tracking-wider">Score</div></div></div>
+                <div class="text-right"><div class="text-xl font-bold text-accent">${a.final_score??'--'}</div>
+                <div class="text-2xs text-text-dim uppercase tracking-wider">Score</div></div></div>
 
             <div class="mb-4"><div class="feed-section-label">Correctness</div>
-            <p class="text-xs text-text-1">${this._esc(a.correctness_summary||'')}</p></div>
+            <p class="text-xs text-text-primary font-sans leading-relaxed">${this._esc(a.correctness_summary||'')}</p></div>
 
-            <div class="mb-4 p-3 bg-surface-0 rounded-lg border border-border-0">
+            <div class="mb-4 p-3 bg-surface-2 border border-line font-mono">
                 <div class="feed-section-label">Complexity</div>
                 <div class="flex gap-6 text-xs">
-                    <div><span class="text-text-2">Time</span> <span class="text-accent font-mono font-semibold ml-1">${a.time_complexity||'--'}</span></div>
-                    <div><span class="text-text-2">Space</span> <span class="text-violet-0 font-mono font-semibold ml-1">${a.space_complexity||'--'}</span></div>
+                    <div><span class="text-text-muted">Time</span> <span class="text-accent font-semibold ml-1">${a.time_complexity||'--'}</span></div>
+                    <div><span class="text-text-muted">Space</span> <span class="text-text-primary font-semibold ml-1">${a.space_complexity||'--'}</span></div>
                 </div>
-                ${a.is_optimal===false?`<p class="text-xs text-amber-0 mt-2">Optimal: ${a.optimal_time||'--'} / ${a.optimal_space||'--'}</p>`:''}</div>
+                ${a.is_optimal===false?`<p class="text-xs text-warn mt-2">Optimal: ${a.optimal_time||'--'} / ${a.optimal_space||'--'}</p>`:''}</div>
 
-            <div class="mb-4"><div class="feed-section-label">Scores</div>
-                ${bar('Correctness',a.correctness_score)}${bar('Performance',a.performance_score)}
-                ${bar('Optimization',a.optimization_score)}${bar('Quality',a.quality_score)}
-                ${bar('Readability',a.readability_score)}${bar('Documentation',a.documentation_score)}</div>`;
+            <div class="mb-4 font-mono">
+                <div class="feed-section-label">Score Breakdown</div>
+                <div class="ascii-score-container space-y-1">
+                    ${asciiLine('CORRECTNESS', a.correctness_score)}
+                    ${asciiLine('PERFORMANCE', a.performance_score)}
+                    ${asciiLine('OPTIMIZATION', a.optimization_score)}
+                    ${asciiLine('QUALITY', a.quality_score)}
+                    ${asciiLine('READABILITY', a.readability_score)}
+                    ${asciiLine('DOCUMENTATION', a.documentation_score)}
+                </div>
+            </div>`;
 
         if (a.complexity_chart) {
             h += `<div class="chart-container mb-3"><canvas id="chat-complexity-chart" height="150"></canvas></div>`;

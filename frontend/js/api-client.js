@@ -117,6 +117,18 @@ const ApiClient = {
     },
 
     /**
+     * Run compile/runtime dry-run check via Piston.
+     * @param {number} sessionId - Session ID
+     * @param {string} code - Source code to check
+     */
+    async dryRunSession(sessionId, code) {
+        return this._fetch(`/sessions/${sessionId}/dry-run`, {
+            method: 'POST',
+            body: JSON.stringify({ code }),
+        });
+    },
+
+    /**
      * Submit code for evaluation — triggers the full pipeline.
      * @param {number} sessionId - Session ID
      * @param {string} code - Source code to evaluate

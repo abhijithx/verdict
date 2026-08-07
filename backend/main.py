@@ -264,23 +264,26 @@ async def export_session_pdf(session_id: int, db: AsyncSession = Depends(get_db)
 # ============================================================================
 # Frontend Static File Serving
 # ============================================================================
+import pathlib
+BASE_DIR = pathlib.Path(__file__).resolve().parent
+FRONTEND_DIR = BASE_DIR.parent / "frontend"
 
-# Serve the frontend directory as static files
-# This must be AFTER all API routes to avoid conflicts
-app.mount("/js", StaticFiles(directory="../frontend/js"), name="js")
-app.mount("/assets", StaticFiles(directory="../frontend/assets"), name="assets")
+if (FRONTEND_DIR / "js").exists():
+    app.mount("/js", StaticFiles(directory=str(FRONTEND_DIR / "js")), name="js")
+if (FRONTEND_DIR / "assets").exists():
+    app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIR / "assets")), name="assets")
 
 
 @app.get("/styles.css")
 async def serve_css():
     """Serve the main CSS file."""
-    return FileResponse("../frontend/styles.css", media_type="text/css")
+    return FileResponse(str(FRONTEND_DIR / "styles.css"), media_type="text/css")
 
 
 @app.get("/")
 async def serve_frontend():
     """Serve the main frontend HTML file."""
-    return FileResponse("../frontend/index.html")
+    return FileResponse(str(FRONTEND_DIR / "index.html"))
 
 
 @app.get("/{path:path}")
@@ -289,10 +292,7 @@ async def serve_fallback(path: str):
     Fallback route — serves index.html for client-side routing.
     This enables the SPA to handle its own routing (e.g., /leaderboard).
     """
-    import os
-    # Check if the requested path is a real file in the frontend directory
-    frontend_path = f"../frontend/{path}"
-    if os.path.isfile(frontend_path):
-        return FileResponse(frontend_path)
-    # Otherwise serve index.html (let the client-side router handle it)
-    return FileResponse("../frontend/index.html")
+    target = FRONTEND_DIR / path
+    if target.is_file():
+        return FileResponse(str(target))
+    return FileResponse(str(FRONTEND_DIR / "index.html"))

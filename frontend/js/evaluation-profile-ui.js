@@ -6,12 +6,12 @@ const EvaluationProfileUI = {
     _weights: { correctness:40, performance:20, optimization:15, quality:15, readability:5, documentation:5 },
 
     _dims: [
-        { key:'correctness', label:'Correctness', color:'#4ade80' },
-        { key:'performance', label:'Performance', color:'#6c8aef' },
-        { key:'optimization', label:'Optimization', color:'#a78bfa' },
-        { key:'quality', label:'Quality', color:'#22d3ee' },
-        { key:'readability', label:'Readability', color:'#fbbf24' },
-        { key:'documentation', label:'Documentation', color:'#f87171' },
+        { key:'correctness', label:'Correctness', color:'#5ddc7a' },
+        { key:'performance', label:'Performance', color:'#5ddc7a' },
+        { key:'optimization', label:'Optimization', color:'#5ddc7a' },
+        { key:'quality', label:'Quality', color:'#5ddc7a' },
+        { key:'readability', label:'Readability', color:'#5ddc7a' },
+        { key:'documentation', label:'Documentation', color:'#5ddc7a' },
     ],
 
     render(containerId) {

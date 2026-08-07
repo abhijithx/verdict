@@ -28,19 +28,20 @@ const Leaderboard = {
                 <table class="lb-tbl"><thead><tr><th>Rank</th><th>Submission</th><th>Lang</th><th>Score</th><th>Profile</th><th>Verdict</th><th>Date</th></tr></thead><tbody>`;
 
             for (const e of data.entries) {
-                const rc = e.rank<=3 ? `lb-rank-${e.rank}` : '';
+                const rc = e.rank === 1 ? 'text-accent font-bold' : 'text-text-muted';
                 const vc = { optimal:'verdict-pass', needs_improvement:'verdict-warn', incorrect:'verdict-fail' }[e.verdict] || '';
-                const sc = (e.final_score||0) >= 80 ? 'text-green-0' : (e.final_score||0) >= 50 ? 'text-amber-0' : 'text-red-0';
+                const vl = { optimal:'[ OPTIMAL ]', needs_improvement:'[ NEEDS WORK ]', incorrect:'[ INCORRECT ]' }[e.verdict] || `[ ${(e.verdict||'--').toUpperCase()} ]`;
                 const dt = new Date(e.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+                const langTag = `[${(e.language||'').substring(0,3).toUpperCase()}]`;
 
                 h += `<tr class="cursor-pointer" onclick="Leaderboard.openSession(${e.session_id})">
-                    <td class="lb-rank ${rc}">${e.rank}</td>
-                    <td class="font-medium">${this._esc(e.submission_label)}</td>
-                    <td class="text-text-2 font-mono text-xs">${e.language}</td>
-                    <td class="${sc} font-bold">${e.final_score??'--'}</td>
+                    <td class="lb-rank font-mono ${rc}">#${e.rank}</td>
+                    <td class="font-medium font-sans">${this._esc(e.submission_label)}</td>
+                    <td class="text-text-muted font-mono text-xs">${langTag}</td>
+                    <td class="text-accent font-mono font-bold">${e.final_score??'--'}</td>
                     <td><span class="profile-badge">${this._esc(e.profile_name||'Default')}</span></td>
-                    <td><span class="verdict ${vc}" style="font-size:10px">${e.verdict||'--'}</span></td>
-                    <td class="text-text-2 text-xs">${dt}</td></tr>`;
+                    <td><span class="verdict ${vc}">${vl}</span></td>
+                    <td class="text-text-muted font-mono text-xs">${dt}</td></tr>`;
             }
             h += '</tbody></table>';
             container.innerHTML = h;

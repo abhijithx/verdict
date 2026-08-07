@@ -132,10 +132,16 @@ API documentation: http://localhost:8000/docs (Swagger UI)
 | Method | Endpoint | Description |
 |---|---|---|
 | `POST` | `/api/sessions?problem_id=N` | Create a new session |
-| `POST` | `/api/sessions/{id}/submit` | Submit code for evaluation |
+| `POST` | `/api/sessions/{id}/dry-run` | Fast compile/runtime dry check via Piston |
+| `POST` | `/api/sessions/{id}/submit` | Submit code for full evaluation pipeline |
 | `GET` | `/api/sessions/{id}` | Get full session details |
 | `GET` | `/api/sessions` | List all sessions |
 | `GET` | `/api/sessions/{id}/export` | Export session report as PDF |
+
+### Direct Evaluation (API-Only Integration)
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/evaluation` | Direct synchronous evaluation path for external CLI / CI integration |
 
 ### Evaluation Profiles
 | Method | Endpoint | Description |

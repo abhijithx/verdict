@@ -275,7 +275,6 @@ class User(Base):
 
     # Relationships
     recommendations = relationship("RecommendationHistory", back_populates="user", cascade="all, delete-orphan")
-    evaluations = relationship("EvaluationHistory", back_populates="user", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<User(username='{self.username}', email='{self.email}')>"
@@ -312,25 +311,4 @@ class RecommendationHistory(Base):
 
     def __repr__(self):
         return f"<RecommendationHistory(id={self.id}, algorithm='{self.recommended_algorithm}')>"
-
-
-class EvaluationHistory(Base):
-    """
-    Stores direct evaluation history records.
-    """
-    __tablename__ = "evaluation_history"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
-    problem = Column(Text, nullable=False)
-    language = Column(String(50), nullable=False)
-    user_code = Column(Text, nullable=False)
-    analysis = Column(JSON, nullable=True)
-    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-
-    # Relationship
-    user = relationship("User", back_populates="evaluations")
-
-    def __repr__(self):
-        return f"<EvaluationHistory(id={self.id}, language='{self.language}')>"
 

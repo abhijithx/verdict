@@ -114,6 +114,8 @@ class JSONValidator:
         test_cases = data.get("test_cases")
         if not test_cases or not isinstance(test_cases, list) or len(test_cases) == 0:
             return False, data, "Generated test_cases list must not be empty"
+        if len(test_cases) < 4:
+            return False, data, f"Only {len(test_cases)} test cases generated; minimum 4 required"
         return True, data, None
 
     @classmethod
