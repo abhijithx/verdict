@@ -65,19 +65,31 @@ async def _call_groq(
         "Authorization": f"Bearer {settings.GROQ_API_KEY}",
         "Content-Type": "application/json",
     }
+    
+    sys_msg = system_instruction
+    if "json" not in sys_msg.lower():
+        sys_msg += "\nYou MUST respond with a single valid JSON object."
+
     payload = {
         "model": settings.GROQ_MODEL,
         "messages": [
-            {"role": "system", "content": system_instruction},
+            {"role": "system", "content": sys_msg},
             {"role": "user", "content": prompt},
         ],
-        "response_format": {"type": "json_object"},
         "temperature": temperature,
         "max_tokens": 4096,
     }
 
     async with httpx.AsyncClient(timeout=60.0) as client:
+        # First attempt with json_object format
+        payload["response_format"] = {"type": "json_object"}
         resp = await client.post(url, headers=headers, json=payload)
+
+        if resp.status_code == 400 and "json_validate_failed" in resp.text:
+            # Fallback attempt without rigid json_object enforcement
+            logger.warning("Groq json_object format failed; retrying without response_format...")
+            payload.pop("response_format", None)
+            resp = await client.post(url, headers=headers, json=payload)
 
         if resp.status_code == 429:
             raise AIProviderError(f"Groq rate limit exceeded (429)")

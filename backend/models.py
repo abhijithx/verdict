@@ -292,7 +292,7 @@ class RecommendationHistory(Base):
     constraints = Column(Text, nullable=True)
     sample_input = Column(Text, nullable=True)
     sample_output = Column(Text, nullable=True)
-    preferred_language = Column(String(50), nullable=False)
+    preferred_language = Column(String(50), nullable=True)
 
     category = Column(String(100), nullable=True)
     recommended_algorithm = Column(String(255), nullable=True)

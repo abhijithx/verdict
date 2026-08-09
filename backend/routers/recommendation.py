@@ -51,7 +51,11 @@ async def get_solution_recommendation(
             preferred_language=request.preferred_language
         )
     except GeminiAPIError as e:
+        logger.error(f"GeminiAPIError in recommendation: {e}")
         raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        logger.error(f"Unexpected error in recommendation: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"AI Analysis Failed: {str(e)}")
 
     # Save to history database table
     history_entry = await history_service.create_recommendation_entry(
