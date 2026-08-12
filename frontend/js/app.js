@@ -48,6 +48,23 @@ const App = {
             HistoryUI.init();
         } else if (activeView === 'recommendation') {
             RecommendationUI.init();
+        } else if (activeView === 'evaluation') {
+            this._loadEvaluationView();
+        }
+    },
+
+    async _loadEvaluationView() {
+        if (this._currentSessionId) {
+            await SessionView.loadSession(this._currentSessionId);
+        } else {
+            try {
+                const sessions = await ApiClient.getSessions();
+                if (sessions && sessions.length > 0) {
+                    await this.openSession(sessions[0].session_id);
+                }
+            } catch (e) {
+                console.error('[APP] Error auto-loading evaluation session:', e);
+            }
         }
     },
 
@@ -95,7 +112,7 @@ const App = {
                         </div>`;
                 }
             }
-            sessionList.innerHTML = html + (emptyState ? emptyState.outerHTML : '');
+            sessionList.innerHTML = html;
             this._updateProblemFilter(problems);
         } catch (e) {
             console.error('[APP] sidebar error:', e);
@@ -107,7 +124,7 @@ const App = {
         this._currentSessionId = sessionId;
         await SessionView.loadSession(sessionId);
         document.querySelectorAll('.sess-item').forEach(el => {
-            el.classList.toggle('active', parseInt(el.dataset.sessionId) === sessionId);
+            el.classList.toggle('active', parseInt(el.dataset.sessionId, 10) === sessionId);
         });
     },
 

@@ -1,6 +1,6 @@
 /**
  * session-view.js — UI controller for the evaluation IDE view.
- * Manages Monaco editor, session state, dry-run, submission, and result rendering.
+ * Manages Monaco editor, session state, dry-run, submission, polling, and result rendering.
  */
 
 const SessionView = {
@@ -20,18 +20,25 @@ const SessionView = {
             this._currentProblemId = session.problem_id;
 
             // Update sidebar active state
-            document.querySelectorAll('.sess-item').forEach(el => el.classList.toggle('active', parseInt(el.dataset.id) === sessionId));
+            document.querySelectorAll('.sess-item').forEach(el => {
+                const sId = parseInt(el.dataset.sessionId, 10);
+                el.classList.toggle('active', sId === sessionId);
+            });
 
             // Update problem description
             const problemDesc = document.getElementById('problem-description');
-            if (problemDesc) {
-                problemDesc.innerHTML = `<p class="text-text-primary font-medium mb-2">${this._esc(session.problem_title)}</p><p class="text-text-secondary">${this._esc(session.problem_statement)}</p>`;
+            if (problemDesc && session.problem) {
+                problemDesc.innerHTML = `<p class="text-text-primary font-medium mb-2">${this._esc(session.problem.title)}</p><p class="text-text-secondary">${this._esc(session.problem.description)}</p>`;
             }
 
-            // Set editor content
-            if (window.monacoEditor) {
-                MonacoSetup.switchLanguage(session.language);
-                window.monacoEditor.setValue(session.code_template || '');
+            // Always update language and tab state first
+            MonacoSetup.switchLanguage(session.language);
+            MonacoSetup.showOnlyTab(session.language);
+
+            // Set editor content if editor is ready
+            const editor = MonacoSetup.getEditor();
+            if (editor) {
+                editor.setValue(session.code || '');
             }
 
             // Reset panels
@@ -39,17 +46,26 @@ const SessionView = {
             document.getElementById('output-content').textContent = 'No output.';
             document.getElementById('panel-test-results').innerHTML = '<p class="text-text-secondary text-[13px]">Submit code to generate and execute test cases.</p>';
 
-            // Reset chat thread
-            const chatThread = document.getElementById('chat-thread');
-            chatThread.innerHTML = `
-                <div class="feed-card">
-                    <p class="text-[13px] text-text-secondary">Welcome to <span class="font-semibold text-text-primary">Solution Evaluation</span>.</p>
-                    <p class="text-[12px] text-text-tertiary mt-1.5 leading-relaxed">Submit your code to execute against verified AI-generated test cases and receive a score breakdown.</p>
-                </div>
-            `;
-
-            // Hide export button
-            document.getElementById('btn-export-pdf')?.classList.add('hidden');
+            // If session already has analysis result, render it
+            if (session.analysis) {
+                this._renderEvaluation(session);
+                document.getElementById('btn-export-pdf')?.classList.remove('hidden');
+            } else if (['generating_tests', 'executing', 'analyzing', 'pending'].includes(session.status)) {
+                // Resume polling if session is actively processing
+                this._pollPipeline(sessionId);
+            } else {
+                // Reset chat thread for new/unsubmitted session
+                const chatThread = document.getElementById('chat-thread');
+                if (chatThread) {
+                    chatThread.innerHTML = `
+                        <div class="feed-card">
+                            <p class="text-[13px] text-text-secondary">Welcome to <span class="font-semibold text-text-primary">Solution Evaluation</span>.</p>
+                            <p class="text-[12px] text-text-tertiary mt-1.5 leading-relaxed">Submit your code to execute against verified AI-generated test cases and receive a score breakdown.</p>
+                        </div>
+                    `;
+                }
+                document.getElementById('btn-export-pdf')?.classList.add('hidden');
+            }
 
         } catch (err) {
             console.error('[SessionView] Failed to load session:', err);
@@ -58,11 +74,11 @@ const SessionView = {
     },
 
     getEditorCode() {
-        return window.monacoEditor ? window.monacoEditor.getValue() : '';
+        return MonacoSetup.getCode() || (window.monacoEditor ? window.monacoEditor.getValue() : '');
     },
 
     async dryRun() {
-        if (!this._sessionId) return alert('No active session.');
+        if (!this._sessionId) return alert('No active session. Please select or create a session.');
         const code = this.getEditorCode();
         if (!code.trim()) return alert('Editor is empty.');
 
@@ -71,7 +87,7 @@ const SessionView = {
         btn.innerHTML = `<span class="animate-spin inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full mr-1"></span> Running...`;
 
         try {
-            const result = await ApiClient.dryRun(this._sessionId, code);
+            const result = await ApiClient.dryRunSession(this._sessionId, code);
             this._renderDryRun(result);
             App.switchBottomTab('output');
         } catch (err) {
@@ -87,66 +103,114 @@ const SessionView = {
         const problemsPanel = document.getElementById('panel-problems');
 
         let output = '';
-        if (result.compilation_error) {
-            output += `=== COMPILATION ERROR ===\n${result.compilation_error}\n\n`;
-        }
-        if (result.runtime_error) {
-            output += `=== RUNTIME ERROR ===\n${result.runtime_error}\n\n`;
-        }
         if (result.stdout) output += `=== STDOUT ===\n${result.stdout}\n`;
-        if (result.stderr) output += `\n=== STDERR ===\n${result.stderr}\n`;
-        if (!output) output = 'Dry run completed with no output.';
+        if (result.stderr) output += `${result.stdout ? '\n' : ''}=== STDERR ===\n${result.stderr}\n`;
+        if (!output) output = result.passed ? 'Dry run completed successfully with no output.' : 'Dry run failed.';
 
         outputPanel.textContent = output;
 
         // Problems panel
         let problemsHtml = '';
-        if (result.compilation_error) {
-            problemsHtml += `<div class="quality-issue"><span class="qi-sev qi-high">ERROR</span><span class="text-text-secondary">${this._esc(result.compilation_error.substring(0,200))}</span></div>`;
+        if (!result.passed && result.stderr) {
+            const errLine = result.error_line ? ` (Line ${result.error_line})` : '';
+            problemsHtml += `
+                <div class="quality-issue">
+                    <span class="qi-sev qi-high">ERROR${errLine}</span>
+                    <span class="text-text-secondary font-mono text-[12px]">${this._esc(result.stderr)}</span>
+                </div>`;
+            if (result.error_line) {
+                MonacoSetup.setGutterMarker(result.error_line, result.stderr);
+            }
+        } else {
+            problemsHtml = '<p class="text-text-secondary text-[13px]">No compilation or runtime errors detected.</p>';
+            MonacoSetup.clearMarkers();
         }
-        if (result.runtime_error) {
-            problemsHtml += `<div class="quality-issue"><span class="qi-sev qi-medium">WARN</span><span class="text-text-secondary">${this._esc(result.runtime_error.substring(0,200))}</span></div>`;
-        }
-        if (!problemsHtml) problemsHtml = '<p class="text-text-secondary text-[13px]">No compilation or runtime errors detected.</p>';
         problemsPanel.innerHTML = problemsHtml;
     },
 
     async submit() {
-        if (!this._sessionId) return alert('No active session.');
+        if (!this._sessionId) return alert('No active session. Please select or create a session.');
         const code = this.getEditorCode();
         if (!code.trim()) return alert('Editor is empty.');
 
         const btn = document.getElementById('btn-submit');
         btn.disabled = true;
-        const originalText = btn.innerHTML;
         btn.innerHTML = `<span class="animate-spin inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full mr-2"></span> Evaluating...`;
 
-        // Show pipeline status
         const statusEl = document.getElementById('pipeline-status');
         const statusText = document.getElementById('pipeline-status-text');
         if (statusEl) { statusEl.classList.remove('hidden'); statusEl.classList.add('flex'); }
-        if (statusText) statusText.textContent = 'Evaluating...';
+        if (statusText) statusText.textContent = 'Pipeline started...';
 
         try {
-            const result = await ApiClient.submit(this._sessionId, code);
-            this._renderEvaluation(result);
-            App.switchBottomTab('test-results');
-            document.getElementById('btn-export-pdf')?.classList.remove('hidden');
+            await ApiClient.submitSession(this._sessionId, code);
+            this._pollPipeline(this._sessionId);
         } catch (err) {
-            alert(`Evaluation failed: ${err.message}`);
-        } finally {
+            alert(`Evaluation failed to start: ${err.message}`);
             btn.disabled = false;
-            btn.innerHTML = originalText;
+            btn.innerHTML = 'Submit Evaluation';
             if (statusEl) { statusEl.classList.add('hidden'); statusEl.classList.remove('flex'); }
         }
     },
 
-    _renderEvaluation(result) {
+    _pollPipeline(sessionId) {
+        const statusMap = {
+            pending: 'Initializing evaluation...',
+            generating_tests: 'AI generating verified test cases...',
+            executing: 'Executing test cases via Piston...',
+            analyzing: 'AI analyzing code performance & quality...'
+        };
+
+        const pollInterval = setInterval(async () => {
+            if (this._sessionId !== sessionId) {
+                clearInterval(pollInterval);
+                return;
+            }
+
+            try {
+                const session = await ApiClient.getSession(sessionId);
+                const statusText = document.getElementById('pipeline-status-text');
+                if (statusText) {
+                    statusText.textContent = statusMap[session.status] || 'Evaluating...';
+                }
+
+                if (session.status === 'complete' || session.status.includes('failed')) {
+                    clearInterval(pollInterval);
+                    const statusEl = document.getElementById('pipeline-status');
+                    if (statusEl) { statusEl.classList.add('hidden'); statusEl.classList.remove('flex'); }
+
+                    const btn = document.getElementById('btn-submit');
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = 'Submit Evaluation';
+                    }
+
+                    if (session.status === 'complete') {
+                        this._renderEvaluation(session);
+                        App.switchBottomTab('test-results');
+                        document.getElementById('btn-export-pdf')?.classList.remove('hidden');
+                    } else {
+                        alert(`Evaluation halted (${session.status}). Check Output tab for compiler/runtime logs.`);
+                    }
+
+                    await App.refreshSidebar();
+                }
+            } catch (err) {
+                console.error('[SessionView] Poll error:', err);
+            }
+        }, 1500);
+    },
+
+    _renderEvaluation(session) {
         const chatThread = document.getElementById('chat-thread');
         const testPanel = document.getElementById('panel-test-results');
 
-        // Build evaluation card
-        const analysis = result.evaluation?.analysis || {};
+        const analysis = session.analysis;
+        if (!analysis) {
+            if (testPanel) testPanel.innerHTML = '<p class="text-text-secondary text-[13px]">Evaluation in progress or incomplete.</p>';
+            return;
+        }
+
         const verdict = analysis.verdict || 'unknown';
         const score = analysis.final_score ?? '--';
 
@@ -157,68 +221,71 @@ const SessionView = {
             <div class="feed-card feed-card-analysis">
                 <div class="flex items-center justify-between mb-3">
                     <span class="verdict ${verdictClass}">${verdictLabel}</span>
-                    <span class="text-[12px] font-mono text-text-tertiary">Score: ${score}/100</span>
+                    <span class="text-[12px] font-mono text-text-tertiary">Score: <strong class="text-text-primary text-[14px]">${score}</strong>/100</span>
                 </div>
         `;
 
-        // Score breakdown
-        if (analysis.signals) {
-            html += `<div class="mb-3 space-y-1.5">`;
-            const signals = analysis.signals;
-            const labels = ['Correctness','Performance','Optimization','Quality','Readability','Docs'];
-            const keys = ['correctness_score','performance_score','optimization_score','quality_score','readability_score','documentation_score'];
-            for (let i=0; i<labels.length; i++) {
-                const val = signals[keys[i]] ?? 0;
-                html += `<div class="score-bar-row !mb-1.5"><span class="score-bar-lbl !w-[90px] !text-[11px]">${labels[i]}</span><div class="score-bar-bg"><div class="score-bar-fill" style="width:${val}%"></div></div><span class="score-bar-val !text-[11px]">${val}</span></div>`;
-            }
-            html += `</div>`;
+        if (analysis.correctness_summary) {
+            html += `<div class="mb-3 p-2.5 bg-void/50 rounded border border-border-subtle"><p class="text-[12px] text-text-secondary leading-relaxed">${this._esc(analysis.correctness_summary)}</p></div>`;
         }
 
-        // Code explanation
+        html += `<div class="mb-3 space-y-1.5">`;
+        const labels = ['Correctness','Performance','Optimization','Quality','Readability','Docs'];
+        const values = [
+            analysis.correctness_score ?? 0,
+            analysis.performance_score ?? 0,
+            analysis.optimization_score ?? 0,
+            analysis.quality_score ?? 0,
+            analysis.readability_score ?? 0,
+            analysis.documentation_score ?? 0
+        ];
+        for (let i = 0; i < labels.length; i++) {
+            html += `
+                <div class="score-bar-row !mb-1.5">
+                    <span class="score-bar-lbl !w-[90px] !text-[11px]">${labels[i]}</span>
+                    <div class="score-bar-bg"><div class="score-bar-fill" style="width:${values[i]}%"></div></div>
+                    <span class="score-bar-val !text-[11px]">${values[i]}</span>
+                </div>`;
+        }
+        html += `</div>`;
+
         if (analysis.code_explanation) {
-            html += `<div class="mb-3"><p class="text-[12px] text-text-secondary leading-relaxed">${this._esc(analysis.code_explanation)}</p></div>`;
+            html += `<div class="mb-3"><div class="feed-section-label">Code Explanation</div><p class="text-[12px] text-text-secondary leading-relaxed">${this._esc(analysis.code_explanation)}</p></div>`;
         }
 
-        // Complexity
-        if (analysis.complexity_analysis) {
-            const ca = analysis.complexity_analysis;
+        if (analysis.time_complexity || analysis.space_complexity) {
             html += `<div class="grid grid-cols-2 gap-2 mb-3 text-[11px] font-mono">`;
-            if (ca.time_complexity) html += `<div class="p-2 bg-void rounded border border-border-subtle"><span class="text-text-tertiary">Time:</span> <span class="text-success">${this._esc(ca.time_complexity)}</span></div>`;
-            if (ca.space_complexity) html += `<div class="p-2 bg-void rounded border border-border-subtle"><span class="text-text-tertiary">Space:</span> <span class="text-success">${this._esc(ca.space_complexity)}</span></div>`;
+            if (analysis.time_complexity) html += `<div class="p-2 bg-void rounded border border-border-subtle"><span class="text-text-tertiary">Time:</span> <span class="text-success font-semibold">${this._esc(analysis.time_complexity)}</span></div>`;
+            if (analysis.space_complexity) html += `<div class="p-2 bg-void rounded border border-border-subtle"><span class="text-text-tertiary">Space:</span> <span class="text-success font-semibold">${this._esc(analysis.space_complexity)}</span></div>`;
             html += `</div>`;
         }
 
-        // Quality issues
         if (analysis.quality_issues && analysis.quality_issues.length > 0) {
             html += `<div class="mb-3"><div class="feed-section-label">Quality Issues</div>`;
-            for (const issue of analysis.quality_issues) {
-                const sevClass = { high: 'qi-high', medium: 'qi-medium', low: 'qi-low' }[issue.severity] || 'qi-low';
-                html += `<div class="quality-issue"><span class="qi-sev ${sevClass}">${issue.severity}</span><span class="text-text-secondary">${this._esc(issue.description)}</span></div>`;
+            for (const qi of analysis.quality_issues) {
+                const sev = qi.severity || 'low';
+                const sevClass = { high: 'qi-high', medium: 'qi-medium', low: 'qi-low' }[sev] || 'qi-low';
+                const desc = qi.issue || qi.description || '';
+                html += `<div class="quality-issue mb-1"><span class="qi-sev ${sevClass}">${sev.toUpperCase()}</span><span class="text-text-secondary text-[12px]">${this._esc(desc)}</span></div>`;
             }
             html += `</div>`;
         }
 
-        // Suggestions
-        if (analysis.suggestions && analysis.suggestions.length > 0) {
-            html += `<div class="mb-3"><div class="feed-section-label">Suggestions</div><ul class="space-y-1">`;
-            for (const s of analysis.suggestions) {
-                html += `<li class="suggestion-item">${this._esc(s)}</li>`;
+        if (analysis.optimization_suggestions && analysis.optimization_suggestions.length > 0) {
+            html += `<div class="mb-3"><div class="feed-section-label">Optimization Suggestions</div><ul class="space-y-1">`;
+            for (const s of analysis.optimization_suggestions) {
+                html += `<li class="suggestion-item text-[12px] text-text-secondary">${this._esc(s)}</li>`;
             }
             html += `</ul></div>`;
         }
 
-        // Reference solution
-        if (analysis.reference_solution) {
-            html += `<div class="mb-3"><div class="feed-section-label">Reference Solution</div><pre class="code-block text-[11px]">${this._esc(analysis.reference_solution)}</pre></div>`;
-        }
-
         html += `</div>`;
 
-        // Test results panel
         let testHtml = '';
-        if (result.test_results && result.test_results.length > 0) {
+        if (session.test_results && session.test_results.length > 0) {
             testHtml += `<div class="space-y-2">`;
-            for (const tr of result.test_results) {
+            for (let i = 0; i < session.test_results.length; i++) {
+                const tr = session.test_results[i];
                 const passed = tr.passed;
                 const statusIcon = passed
                     ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2.5"><path d="M9 12l2 2 4-4"/></svg>`
@@ -226,11 +293,16 @@ const SessionView = {
                 testHtml += `
                     <div class="p-3 rounded-lg border ${passed ? 'border-success/20 bg-success/5' : 'border-danger/20 bg-danger/5'}">
                         <div class="flex items-center justify-between mb-1.5">
-                            <div class="flex items-center gap-2"><span>${statusIcon}</span><span class="text-[12px] font-medium text-text-primary">Test ${tr.test_number}</span></div>
-                            <span class="text-[11px] font-mono text-text-tertiary">${tr.execution_time_ms ?? '--'}ms</span>
+                            <div class="flex items-center gap-2">
+                                <span>${statusIcon}</span>
+                                <span class="text-[12px] font-medium text-text-primary">Test ${i+1}${tr.is_edge_case ? ' [EDGE CASE]' : ''}</span>
+                            </div>
+                            <span class="text-[11px] font-mono text-text-tertiary">${tr.time_ms ? tr.time_ms.toFixed(1) : '--'}ms</span>
                         </div>
-                        ${!passed && tr.actual_output ? `<div class="text-[11px] font-mono text-text-tertiary mt-1"><span class="text-danger">Got:</span> ${this._esc(tr.actual_output.substring(0,100))}</div>` : ''}
-                        ${!passed && tr.expected_output ? `<div class="text-[11px] font-mono text-text-tertiary"><span class="text-success">Expected:</span> ${this._esc(tr.expected_output.substring(0,100))}</div>` : ''}
+                        <div class="text-[11px] font-mono text-text-tertiary mt-1"><span class="text-text-secondary">Input:</span> ${this._esc(tr.stdin)}</div>
+                        ${!passed && tr.actual_stdout ? `<div class="text-[11px] font-mono text-text-tertiary"><span class="text-danger">Got:</span> ${this._esc(tr.actual_stdout)}</div>` : ''}
+                        ${!passed && tr.expected_stdout ? `<div class="text-[11px] font-mono text-text-tertiary"><span class="text-success">Expected:</span> ${this._esc(tr.expected_stdout)}</div>` : ''}
+                        ${tr.stderr ? `<div class="text-[11px] font-mono text-danger mt-1">${this._esc(tr.stderr)}</div>` : ''}
                     </div>
                 `;
             }
@@ -241,10 +313,7 @@ const SessionView = {
 
         testPanel.innerHTML = testHtml;
 
-        // Append to chat thread
-        const div = document.createElement('div');
-        div.innerHTML = html;
-        chatThread.appendChild(div.firstElementChild);
+        chatThread.innerHTML = html;
         chatThread.scrollTop = chatThread.scrollHeight;
     },
 

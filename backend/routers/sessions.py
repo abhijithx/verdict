@@ -132,10 +132,10 @@ async def dry_run_session(
     from pipeline.error_parser import parse_error_line
 
     dry_run_output = await piston_client.dry_run(submission.code, session.language)
-    passed = dry_run_output.get("passed", False)
-    stdout = dry_run_output.get("stdout")
-    stderr = dry_run_output.get("stderr")
-    error_line = parse_error_line(stderr, session.language) if stderr else None
+    passed = dry_run_output.passed
+    stdout = dry_run_output.stdout
+    stderr = dry_run_output.stderr
+    error_line = dry_run_output.error_line or (parse_error_line(stderr, session.language) if stderr else None)
 
     dry_run_record = DryRunResult(
         session_id=session_id,

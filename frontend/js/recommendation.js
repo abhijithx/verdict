@@ -95,6 +95,7 @@ const RecommendationUI = {
         const userSelectedLang = document.getElementById('rec-language')?.value || null;
         const isAiSelected = !userSelectedLang;
         const badgeHtml = isAiSelected
+            ? `<span class="inline-block ml-1 px-1.5 py-0.5 text-[10px] font-mono font-semibold text-accent border border-accent/20 uppercase tracking-wider">[MIN TIME]</span>`
             : `<span class="inline-block ml-1 px-1.5 py-0.5 text-[10px] font-mono font-semibold text-text-tertiary border border-border-subtle uppercase tracking-wider">[ REQUESTED ]</span>`;
 
         const elCat = document.getElementById('rec-res-category');

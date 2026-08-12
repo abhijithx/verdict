@@ -52,29 +52,23 @@ const MONACO_LANG_MAP = {
 };
 
 const MonacoSetup = {
+    _currentLanguage: 'python',
+
     /**
      * Initialize Monaco Editor from CDN.
-     * 
-     * Sets up the AMD loader, configures the worker proxy for cross-origin
-     * loading, and creates the editor instance in the container div.
-     * 
-     * @param {string} containerId - ID of the div to mount the editor into
-     * @param {string} language - Initial language ('python', 'cpp', 'java')
-     * @param {string} initialCode - Initial code to display (optional)
-     * @returns {Promise} - Resolves when the editor is ready
      */
     init(containerId = 'editor-container', language = 'python', initialCode = null) {
+        if (editorInstance || window.monacoEditor) {
+            return Promise.resolve(window.monacoEditor || editorInstance);
+        }
+
         return new Promise((resolve) => {
-            // Configure the Monaco AMD loader to use the CDN
             require.config({
                 paths: {
                     'vs': 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs'
                 }
             });
 
-            // Set up the worker proxy for cross-origin CDN loading
-            // Without this, Monaco throws errors when trying to create Web Workers
-            // from a different origin (the CDN vs our localhost)
             window.MonacoEnvironment = {
                 getWorkerUrl: function (moduleId, label) {
                     return `data:text/javascript;charset=utf-8,${encodeURIComponent(`
@@ -86,12 +80,11 @@ const MonacoSetup = {
                 }
             };
 
-            // Load the editor module and create the instance
             require(['vs/editor/editor.main'], function () {
                 const container = document.getElementById(containerId);
-                const code = initialCode || BOILERPLATES[language] || '';
+                const activeLang = MonacoSetup._currentLanguage || language;
+                const code = initialCode || BOILERPLATES[activeLang] || '';
 
-                // Define custom Verdict dark theme matching Compiler Ledger design tokens
                 monaco.editor.defineTheme('verdict-dark', {
                     base: 'vs-dark',
                     inherit: true,
@@ -115,10 +108,9 @@ const MonacoSetup = {
                     }
                 });
 
-                // Create the editor instance
                 editorInstance = monaco.editor.create(container, {
                     value: code,
-                    language: MONACO_LANG_MAP[language] || 'python',
+                    language: MONACO_LANG_MAP[activeLang] || 'python',
                     theme: 'verdict-dark',
                     fontSize: 13,
                     fontFamily: "'IBM Plex Mono', 'Consolas', monospace",
@@ -142,87 +134,57 @@ const MonacoSetup = {
                     bracketPairColorization: { enabled: true },
                 });
 
-                // Update active tab styling
-                MonacoSetup._updateTabState(language);
+                window.monacoEditor = editorInstance;
+                MonacoSetup.switchLanguage(activeLang);
 
-                console.log('[MONACO] Editor initialized with language:', language);
+                console.log('[MONACO] Editor initialized with language:', activeLang);
                 resolve(editorInstance);
             });
         });
     },
 
-    /**
-     * Get the current editor instance.
-     * @returns {object|null} Monaco editor instance
-     */
     getEditor() {
-        return editorInstance;
+        return editorInstance || window.monacoEditor;
     },
 
-    /**
-     * Get the current code from the editor.
-     * @returns {string} Current editor content
-     */
     getCode() {
-        return editorInstance ? editorInstance.getValue() : '';
+        const ed = this.getEditor();
+        return ed ? ed.getValue() : '';
     },
 
-    /**
-     * Set the editor content.
-     * @param {string} code - Code to set
-     */
     setCode(code) {
-        if (editorInstance) {
-            editorInstance.setValue(code);
+        const ed = this.getEditor();
+        if (ed) {
+            ed.setValue(code);
         }
     },
 
-    /**
-     * Switch the editor language and update the UI tab state.
-     * 
-     * This changes the Monaco language mode (for syntax highlighting)
-     * and optionally resets the code to the language boilerplate.
-     * 
-     * @param {string} language - 'python', 'cpp', or 'java'
-     * @param {boolean} resetCode - If true, replace code with boilerplate
-     */
     switchLanguage(language, resetCode = false) {
-        if (!editorInstance) return;
+        this._currentLanguage = language;
+        MonacoSetup._updateTabState(language, true);
+
+        const ed = this.getEditor();
+        if (!ed) return;
 
         const monacoLang = MONACO_LANG_MAP[language] || 'python';
-        const model = editorInstance.getModel();
+        const model = ed.getModel();
 
-        // Change the language mode on the existing model
-        monaco.editor.setModelLanguage(model, monacoLang);
-
-        // Optionally reset code to boilerplate
-        if (resetCode) {
-            editorInstance.setValue(BOILERPLATES[language] || '');
+        if (model) {
+            monaco.editor.setModelLanguage(model, monacoLang);
         }
 
-        // Update tab styling
-        MonacoSetup._updateTabState(language);
+        if (resetCode) {
+            ed.setValue(BOILERPLATES[language] || '');
+        }
 
-        // Clear any error markers from the previous language
         MonacoSetup.clearMarkers();
-
         console.log('[MONACO] Switched to language:', language);
     },
 
-    /**
-     * Set a red gutter marker on a specific line (for compile/runtime errors).
-     * 
-     * Uses Monaco's deltaDecorations API to add a red background highlight
-     * and a red dot in the gutter margin on the error line.
-     * 
-     * @param {number} line - 1-indexed line number
-     * @param {string} message - Error message to show on hover
-     * @param {string} severity - 'error' (red), 'warning' (yellow), 'info' (blue)
-     */
     setGutterMarker(line, message, severity = 'error') {
-        if (!editorInstance || !line) return;
+        const ed = this.getEditor();
+        if (!ed || !line) return;
 
-        // Map severity to CSS class names
         const severityClasses = {
             error: {
                 line: 'errorLineDecoration',
@@ -235,8 +197,7 @@ const MonacoSetup = {
         };
         const classes = severityClasses[severity] || severityClasses.error;
 
-        // Add the decoration
-        const newDecorations = editorInstance.deltaDecorations(currentDecorations, [
+        const newDecorations = ed.deltaDecorations(currentDecorations, [
             {
                 range: new monaco.Range(line, 1, line, 1),
                 options: {
@@ -253,38 +214,34 @@ const MonacoSetup = {
         ]);
         currentDecorations = newDecorations;
 
-        // Also add a marker for the Problems panel integration
-        const model = editorInstance.getModel();
-        monaco.editor.setModelMarkers(model, 'codescore', [
-            {
-                startLineNumber: line,
-                startColumn: 1,
-                endLineNumber: line,
-                endColumn: model.getLineMaxColumn(line),
-                message: message,
-                severity: severity === 'error'
-                    ? monaco.MarkerSeverity.Error
-                    : monaco.MarkerSeverity.Warning,
-            },
-        ]);
+        const model = ed.getModel();
+        if (model) {
+            monaco.editor.setModelMarkers(model, 'codescore', [
+                {
+                    startLineNumber: line,
+                    startColumn: 1,
+                    endLineNumber: line,
+                    endColumn: model.getLineMaxColumn(line),
+                    message: message,
+                    severity: severity === 'error'
+                        ? monaco.MarkerSeverity.Error
+                        : monaco.MarkerSeverity.Warning,
+                },
+            ]);
+        }
 
-        // Scroll to the error line
-        editorInstance.revealLineInCenter(line);
+        ed.revealLineInCenter(line);
     },
 
-    /**
-     * Clear all gutter markers and decorations.
-     * Called before each new submission to remove previous error indicators.
-     */
     clearMarkers() {
-        if (!editorInstance) return;
+        const ed = this.getEditor();
+        if (!ed) return;
 
-        // Remove decorations
-        currentDecorations = editorInstance.deltaDecorations(currentDecorations, []);
-
-        // Remove model markers
-        const model = editorInstance.getModel();
-        monaco.editor.setModelMarkers(model, 'codescore', []);
+        currentDecorations = ed.deltaDecorations(currentDecorations, []);
+        const model = ed.getModel();
+        if (model) {
+            monaco.editor.setModelMarkers(model, 'codescore', []);
+        }
     },
 
     /**
@@ -292,16 +249,34 @@ const MonacoSetup = {
      * @param {string} activeLanguage - The currently active language
      * @private
      */
-    _updateTabState(activeLanguage) {
-        // Remove 'active' class from all tabs
+    _updateTabState(activeLanguage, showOnlyActive = true) {
+        // Remove 'active' class from all tabs, hide non-active if showOnlyActive is true
         document.querySelectorAll('.ed-tab').forEach(tab => {
-            tab.classList.remove('active');
+            const isActive = tab.dataset.lang === activeLanguage;
+            tab.classList.toggle('active', isActive);
+            if (showOnlyActive) {
+                tab.style.display = isActive ? '' : 'none';
+            }
         });
-        // Add 'active' class to the selected tab
-        const activeTab = document.querySelector(`.ed-tab[data-lang="${activeLanguage}"]`);
-        if (activeTab) {
-            activeTab.classList.add('active');
-        }
+    },
+
+    /**
+     * Show only the tab for the given language, hiding the rest.
+     * Called when a session is loaded to avoid showing irrelevant language tabs.
+     * @param {string} language - The session's language
+     */
+    showOnlyTab(language) {
+        this._updateTabState(language, true);
+    },
+
+    /**
+     * Restore all language tabs to visible.
+     * Called when no session is active or when the user needs to switch.
+     */
+    showAllTabs() {
+        document.querySelectorAll('.ed-tab').forEach(tab => {
+            tab.style.display = '';
+        });
     },
 };
 
