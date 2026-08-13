@@ -93,6 +93,8 @@ const App = {
 
             let html = '';
             for (const [problemId, problemSessions] of Object.entries(grouped)) {
+                // Apply problem filter
+                if (this._filterProblemId && this._filterProblemId !== 'all' && String(problemId) !== String(this._filterProblemId)) continue;
                 const problemTitle = problemMap[problemId] || `Problem ${problemId}`;
                 html += `<div class="px-2.5 py-1.5 text-2xs font-semibold text-text-3 uppercase tracking-widest border-b border-border-0">${this._esc(problemTitle)}</div>`;
 
@@ -128,7 +130,10 @@ const App = {
         });
     },
 
+    _filterProblemId: 'all',
+
     async filterSessions(value) {
+        this._filterProblemId = value;
         await this.refreshSidebar();
     },
 

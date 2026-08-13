@@ -41,18 +41,30 @@ const SessionView = {
                 editor.setValue(session.code || '');
             }
 
-            // Reset panels
-            document.getElementById('panel-problems').innerHTML = '<p class="text-text-secondary text-[13px]">No diagnostics. Write code and submit.</p>';
-            document.getElementById('output-content').textContent = 'No output.';
-            document.getElementById('panel-test-results').innerHTML = '<p class="text-text-secondary text-[13px]">Submit code to generate and execute test cases.</p>';
+            // Reset bottom panel to default tab
+            App.switchBottomTab('problems');
 
             // If session already has analysis result, render it
             if (session.analysis) {
                 this._renderEvaluation(session);
                 document.getElementById('btn-export-pdf')?.classList.remove('hidden');
             } else if (['generating_tests', 'executing', 'analyzing', 'pending'].includes(session.status)) {
-                // Resume polling if session is actively processing
+                // Show pipeline status bar and resume polling
+                const statusEl = document.getElementById('pipeline-status');
+                const statusText = document.getElementById('pipeline-status-text');
+                if (statusEl) { statusEl.classList.remove('hidden'); statusEl.classList.add('flex'); }
+                if (statusText) statusText.textContent = 'Pipeline running...';
+                const btn = document.getElementById('btn-submit');
+                if (btn) {
+                    btn.disabled = true;
+                    btn.innerHTML = `<span class="animate-spin inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full mr-2"></span> Evaluating...`;
+                }
                 this._pollPipeline(sessionId);
+            } else if (session.status === 'dry_run_failed' && session.dry_run) {
+                // Show the dry-run error in the output panel
+                this._renderDryRun(session.dry_run);
+                App.switchBottomTab('output');
+                document.getElementById('btn-export-pdf')?.classList.add('hidden');
             } else {
                 // Reset chat thread for new/unsubmitted session
                 const chatThread = document.getElementById('chat-thread');
@@ -66,6 +78,9 @@ const SessionView = {
                 }
                 document.getElementById('btn-export-pdf')?.classList.add('hidden');
             }
+
+            // Auto-focus editor
+            if (editor) setTimeout(() => editor.focus(), 100);
 
         } catch (err) {
             console.error('[SessionView] Failed to load session:', err);
@@ -105,9 +120,17 @@ const SessionView = {
         let output = '';
         if (result.stdout) output += `=== STDOUT ===\n${result.stdout}\n`;
         if (result.stderr) output += `${result.stdout ? '\n' : ''}=== STDERR ===\n${result.stderr}\n`;
-        if (!output) output = result.passed ? 'Dry run completed successfully with no output.' : 'Dry run failed.';
+        if (!output) output = result.passed ? '✓ Dry run completed successfully with no output.' : '✗ Dry run failed.';
 
         outputPanel.textContent = output;
+
+        // Apply success/error styling to the output panel
+        outputPanel.classList.remove('text-success', 'text-danger');
+        if (!result.stderr && result.passed) {
+            outputPanel.classList.add('text-success');
+        } else if (!result.passed) {
+            outputPanel.classList.add('text-danger');
+        }
 
         // Problems panel
         let problemsHtml = '';
@@ -121,6 +144,9 @@ const SessionView = {
             if (result.error_line) {
                 MonacoSetup.setGutterMarker(result.error_line, result.stderr);
             }
+        } else if (result.passed) {
+            problemsHtml = '<p class="text-success text-[13px]">✓ No compilation or runtime errors detected.</p>';
+            MonacoSetup.clearMarkers();
         } else {
             problemsHtml = '<p class="text-text-secondary text-[13px]">No compilation or runtime errors detected.</p>';
             MonacoSetup.clearMarkers();
@@ -156,6 +182,7 @@ const SessionView = {
     _pollPipeline(sessionId) {
         const statusMap = {
             pending: 'Initializing evaluation...',
+            dry_run_passed: 'Dry run passed, generating tests...',
             generating_tests: 'AI generating verified test cases...',
             executing: 'Executing test cases via Piston...',
             analyzing: 'AI analyzing code performance & quality...'
@@ -174,7 +201,7 @@ const SessionView = {
                     statusText.textContent = statusMap[session.status] || 'Evaluating...';
                 }
 
-                if (session.status === 'complete' || session.status.includes('failed')) {
+                if (session.status === 'complete' || session.status === 'failed' || session.status === 'dry_run_failed') {
                     clearInterval(pollInterval);
                     const statusEl = document.getElementById('pipeline-status');
                     if (statusEl) { statusEl.classList.add('hidden'); statusEl.classList.remove('flex'); }
@@ -189,8 +216,23 @@ const SessionView = {
                         this._renderEvaluation(session);
                         App.switchBottomTab('test-results');
                         document.getElementById('btn-export-pdf')?.classList.remove('hidden');
+                    } else if (session.status === 'dry_run_failed') {
+                        // Show dry-run error details instead of generic alert
+                        if (session.dry_run) {
+                            this._renderDryRun(session.dry_run);
+                        }
+                        App.switchBottomTab('output');
+                        const chatThread = document.getElementById('chat-thread');
+                        if (chatThread) {
+                            chatThread.innerHTML += `
+                                <div class="feed-card" style="border-left: 3px solid var(--danger, #c97b6b);">
+                                    <p class="text-[13px] text-danger font-medium">Dry Run Failed</p>
+                                    <p class="text-[12px] text-text-tertiary mt-1">Your code has compilation or runtime errors. Fix the issues shown in the Output tab and resubmit.</p>
+                                </div>
+                            `;
+                        }
                     } else {
-                        alert(`Evaluation halted (${session.status}). Check Output tab for compiler/runtime logs.`);
+                        alert(`Evaluation failed. Check Output tab for details.`);
                     }
 
                     await App.refreshSidebar();
@@ -198,7 +240,7 @@ const SessionView = {
             } catch (err) {
                 console.error('[SessionView] Poll error:', err);
             }
-        }, 1500);
+        }, 2000);
     },
 
     _renderEvaluation(session) {

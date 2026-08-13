@@ -189,7 +189,7 @@ async def submit_session(
         raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
 
     # Atomic check & update: don't allow re-submission while pipeline is running
-    active_statuses = ["generating_tests", "executing", "analyzing"]
+    active_statuses = ["generating_tests", "executing", "analyzing", "pending"]
     from sqlalchemy import update
     res = await db.execute(
         update(Session)
@@ -205,43 +205,39 @@ async def submit_session(
             detail=f"Session is busy or currently running ({session.status}). Wait for completion."
         )
 
-    # For resubmissions: if session already has analysis, compress history
-    if session.status == "complete":
-        # Load prior analysis for history compression
-        analysis_result = await db.execute(
-            select(AnalysisResult).where(AnalysisResult.session_id == session_id)
+    # Refresh session so in-memory object matches DB after atomic update
+    await db.refresh(session)
+
+    # For resubmissions: compress prior analysis into history summary
+    analysis_result = await db.execute(
+        select(AnalysisResult).where(AnalysisResult.session_id == session_id)
+    )
+    prior_analysis = analysis_result.scalars().first()
+
+    if prior_analysis:
+        from pipeline.history_compressor import compress_history
+        problem_result = await db.execute(
+            select(Problem).where(Problem.problem_id == session.problem_id)
         )
-        prior_analysis = analysis_result.scalars().first()
+        problem = problem_result.scalars().first()
 
-        if prior_analysis:
-            from pipeline.history_compressor import compress_history
-            # Build summary from prior analysis
-            problem_result = await db.execute(
-                select(Problem).where(Problem.problem_id == session.problem_id)
-            )
-            problem = problem_result.scalars().first()
+        prior_data = {
+            "verdict": prior_analysis.verdict,
+            "time_complexity": prior_analysis.time_complexity,
+            "space_complexity": prior_analysis.space_complexity,
+            "correctness_summary": prior_analysis.correctness_summary,
+            "optimization_suggestions": prior_analysis.optimization_suggestions_json or [],
+        }
+        session.history_summary = compress_history(
+            problem.description if problem else "", prior_data
+        )
 
-            prior_data = {
-                "verdict": prior_analysis.verdict,
-                "time_complexity": prior_analysis.time_complexity,
-                "space_complexity": prior_analysis.space_complexity,
-                "correctness_summary": prior_analysis.correctness_summary,
-                "optimization_suggestions": prior_analysis.optimization_suggestions_json or [],
-            }
-            session.history_summary = compress_history(
-                problem.description if problem else "", prior_data
-            )
-
-            # Clean up old results for this session (new submission = new results)
-            await db.execute(
-                select(AnalysisResult).where(AnalysisResult.session_id == session_id)
-            )
-            # Delete old analysis, test cases, execution results
-            from sqlalchemy import delete
-            await db.execute(delete(AnalysisResult).where(AnalysisResult.session_id == session_id))
-            await db.execute(delete(ExecutionResult).where(ExecutionResult.session_id == session_id))
-            await db.execute(delete(GeneratedTestCase).where(GeneratedTestCase.session_id == session_id))
-            await db.execute(delete(DryRunResult).where(DryRunResult.session_id == session_id))
+    # Always clean up old results before resubmission (not just for "complete")
+    from sqlalchemy import delete
+    await db.execute(delete(AnalysisResult).where(AnalysisResult.session_id == session_id))
+    await db.execute(delete(ExecutionResult).where(ExecutionResult.session_id == session_id))
+    await db.execute(delete(GeneratedTestCase).where(GeneratedTestCase.session_id == session_id))
+    await db.execute(delete(DryRunResult).where(DryRunResult.session_id == session_id))
 
     # Update the session with new code and reset status
     session.code = submission.code
@@ -349,7 +345,7 @@ async def get_session(
             analysis_id=analysis.analysis_id,
             verdict=analysis.verdict,
             correctness_summary=analysis.correctness_summary,
-            failing_cases=[FailingCaseDetail(**fc) for fc in (analysis.failing_cases_json or [])],
+            failing_cases=[FailingCaseDetail.model_validate(fc) for fc in (analysis.failing_cases_json or [])],
             time_complexity=analysis.time_complexity,
             space_complexity=analysis.space_complexity,
             is_optimal=analysis.is_optimal,
@@ -358,7 +354,7 @@ async def get_session(
             complexity_chart=analysis.complexity_chart_json,
             optimization_suggestions=analysis.optimization_suggestions_json,
             code_explanation=analysis.code_explanation,
-            quality_issues=[QualityIssue(**qi) for qi in (analysis.quality_issues_json or [])],
+            quality_issues=[QualityIssue.model_validate(qi) for qi in (analysis.quality_issues_json or [])],
             final_notes=analysis.final_notes,
             correctness_score=analysis.correctness_score,
             performance_score=analysis.performance_score,

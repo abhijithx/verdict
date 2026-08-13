@@ -141,5 +141,24 @@ class PromptBuilder:
             "problem_statement": problem_statement,
             "history_summary": history_summary or "",
             "execution_results": test_results_summary,
+            "instructions": (
+                "Analyze this code against the problem statement using the REAL execution results provided above. "
+                "You MUST respond with a single valid JSON object containing exactly these fields:\n\n"
+                "- verdict: (string) one of 'optimal', 'needs_improvement', or 'incorrect'\n"
+                "- correctness_summary: (string) 2-3 sentence summary of correctness based on test results\n"
+                "- failing_cases: (array) [{id, why_it_fails, fix_suggestion}] for each failing test\n"
+                "- complexity: (object) {time: string, space: string, is_optimal: bool, optimal_time: string, optimal_space: string}\n"
+                "- complexity_chart: (object) {type: 'bar', labels: [string], datasets: [{label: string, values: [number]}]}\n"
+                "- optimization_suggestions: (array of strings) specific actionable improvements\n"
+                "- code_explanation: (string) step-by-step walkthrough of the code logic\n"
+                "- quality_score: (int 0-100) code quality rating\n"
+                "- readability_score: (int 0-100) readability rating\n"
+                "- documentation_score: (int 0-100) documentation rating\n"
+                "- quality_issues: (array) [{issue: string, severity: 'low'|'medium'|'high', suggestion: string}]\n"
+                "- final_notes: (string) brief closing remarks\n\n"
+                "IMPORTANT: Base your verdict on the ACTUAL execution results. "
+                "If all tests passed, verdict should be 'optimal' or 'needs_improvement'. "
+                "If any tests failed, analyze WHY they failed."
+            )
         }
         return json.dumps(payload, indent=2)

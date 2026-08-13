@@ -240,13 +240,15 @@ class PistonClient:
             return DryRunResult(passed=False, stderr=f"Execution engine error: {type(e).__name__}: {str(e)}")
 
         compile_result = result.get("compile", {})
-        if compile_result and compile_result.get("stderr", "").strip():
+        compile_code = compile_result.get("code", 0) if compile_result else 0
+        compile_stderr = compile_result.get("stderr", "").strip() if compile_result else ""
+        if compile_code != 0 or (compile_stderr and not compile_result.get("stdout", "")):
             from pipeline.error_parser import parse_error_line
-            error_line = parse_error_line(compile_result["stderr"], language)
+            error_line = parse_error_line(compile_stderr, language) if compile_stderr else None
             return DryRunResult(
                 passed=False,
                 stdout=compile_result.get("stdout", ""),
-                stderr=compile_result["stderr"],
+                stderr=compile_stderr,
                 error_line=error_line,
             )
 
@@ -321,16 +323,21 @@ class PistonClient:
 
     async def run_all_tests(self, code: str, language: str,
                             test_cases: list) -> list[TestExecutionResult]:
-        tasks = [
-            self.run_test(
-                code=code,
-                language=language,
-                test_id=tc.test_id,
-                stdin=tc.stdin,
-                expected_stdout=tc.expected_stdout,
-            )
-            for tc in test_cases
-        ]
+        # Limit concurrency to avoid Piston rate limits and local resource exhaustion
+        semaphore = asyncio.Semaphore(3)
+
+        async def _run_with_limit(tc):
+            async with semaphore:
+                await asyncio.sleep(RATE_LIMIT_DELAY)  # Small delay between executions
+                return await self.run_test(
+                    code=code,
+                    language=language,
+                    test_id=tc.test_id,
+                    stdin=tc.stdin,
+                    expected_stdout=tc.expected_stdout,
+                )
+
+        tasks = [_run_with_limit(tc) for tc in test_cases]
         results = await asyncio.gather(*tasks)
         return list(results)
 
