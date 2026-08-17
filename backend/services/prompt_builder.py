@@ -118,7 +118,18 @@ class PromptBuilder:
                 "time complexity (larger input near constraint limits). "
                 "Mark edge_case=true for any case in category (2) or (3). "
                 "Each test case must have realistic stdin/stdout matching the exact I/O format "
-                "described in the problem statement."
+                "described in the problem statement.\n\n"
+                "You MUST respond with a single valid JSON object containing exactly these fields:\n"
+                "- response_type: (string) must be 'first'\n"
+                "- problem_understanding: (string) brief explanation of what the problem requires\n"
+                "- clarifications_needed: (array of strings) list of clarifications or assumptions, or empty list if none\n"
+                "- test_cases: (array) a list of test cases, each containing:\n"
+                "  - id: (string) unique ID for the test case (e.g. 'tc_1', 'tc_2', NOT an integer)\n"
+                "  - description: (string) explanation of what this test case verifies\n"
+                "  - stdin: (string) exact standard input string to pass to the program\n"
+                "  - expected_stdout: (string) exact expected standard output string from the program\n"
+                "  - edge_case: (boolean) true if it's an edge case or complexity case, false otherwise\n"
+                "- notes: (string) any additional notes or commentary, or empty string"
             )
         }
         return json.dumps(payload, indent=2)

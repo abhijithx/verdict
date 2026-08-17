@@ -88,7 +88,7 @@ async def create_session(
         submission_label=session_data.submission_label,
         language=session_data.language,
         code=session_data.code or _get_boilerplate(session_data.language),
-        status="pending",
+        status="draft",
     )
     db.add(new_session)
     await db.commit()
@@ -96,7 +96,7 @@ async def create_session(
 
     return {
         "session_id": new_session.session_id,
-        "status": "pending",
+        "status": "draft",
         "message": "Session created successfully",
     }
 
@@ -119,8 +119,8 @@ async def dry_run_session(
     if not session:
         raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
 
-    active_statuses = {"generating_tests", "executing", "analyzing"}
-    if session.status in active_statuses:
+    in_flight_statuses = {"generating_tests", "executing", "analyzing"}
+    if session.status in in_flight_statuses:
         raise HTTPException(
             status_code=409,
             detail=f"Session pipeline is currently running ({session.status}). Wait for completion."
@@ -188,14 +188,14 @@ async def submit_session(
     if not session:
         raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
 
-    # Atomic check & update: don't allow re-submission while pipeline is running
-    active_statuses = ["generating_tests", "executing", "analyzing", "pending"]
+    # Atomic check & update: don't allow re-submission while in-flight pipeline steps are actively running
+    in_flight_statuses = ["generating_tests", "executing", "analyzing"]
     from sqlalchemy import update
     res = await db.execute(
         update(Session)
         .where(
             Session.session_id == session_id,
-            Session.status.notin_(active_statuses)
+            Session.status.notin_(in_flight_statuses)
         )
         .values(status="pending")
     )

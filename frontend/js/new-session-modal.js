@@ -69,30 +69,48 @@ const NewSessionModal = {
 
     async create() {
         const label = document.getElementById('modal-submission-label').value.trim();
-        if (!label) return alert('Enter a submission label.');
+        if (!label) {
+            if (typeof Toast !== 'undefined') Toast.warning('Please enter a submission label (e.g. "Attempt 1").');
+            return;
+        }
 
         let problemId = this._problemId;
         if (problemId === 'new') {
             const title = document.getElementById('modal-problem-title').value.trim();
             const desc = document.getElementById('modal-problem-desc').value.trim();
-            if (!title) return alert('Enter a problem title.');
-            if (!desc) return alert('Enter a problem statement.');
+            if (!title) {
+                if (typeof Toast !== 'undefined') Toast.warning('Please enter a problem title.');
+                return;
+            }
+            if (!desc) {
+                if (typeof Toast !== 'undefined') Toast.warning('Please enter a problem statement.');
+                return;
+            }
             try {
                 const p = await ApiClient.createProblem(title, desc);
                 problemId = p.problem_id;
-            } catch (e) { return alert(`Failed: ${e.message}`); }
+            } catch (e) {
+                if (typeof Toast !== 'undefined') Toast.error(`Failed to create problem: ${e.message}`);
+                return;
+            }
         }
 
         const profileSel = document.getElementById('modal-profile-select');
         let profileId = profileSel.value;
-        if (profileId === 'custom') return alert('Save your custom profile first.');
+        if (profileId === 'custom') {
+            if (typeof Toast !== 'undefined') Toast.warning('Please save your custom evaluation profile first.');
+            return;
+        }
         profileId = parseInt(profileId, 10) || null;
 
         try {
-            const result = await ApiClient.createSession(parseInt(problemId,10), this._lang, label, profileId);
+            const result = await ApiClient.createSession(parseInt(problemId, 10), this._lang, label, profileId);
             this.close();
+            if (typeof Toast !== 'undefined') Toast.success('Session created successfully!');
             await App.openSession(result.session_id);
             await App.refreshSidebar();
-        } catch (e) { alert(`Failed: ${e.message}`); }
+        } catch (e) {
+            if (typeof Toast !== 'undefined') Toast.error(`Failed to create session: ${e.message}`);
+        }
     },
 };

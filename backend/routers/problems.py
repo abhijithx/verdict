@@ -13,12 +13,60 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from database import get_db
-from models import Problem, Session, AnalysisResult, EvaluationProfile
+from models import Problem, Session, AnalysisResult, EvaluationProfile, RecommendationHistory
 from schemas import (
-    ProblemCreate, ProblemResponse, LeaderboardEntry, LeaderboardResponse
+    ProblemCreate, ProblemResponse, LeaderboardEntry, LeaderboardResponse,
+    PlatformStatsResponse
 )
 
 router = APIRouter(prefix="/api/problems", tags=["problems"])
+
+
+@router.get("/stats", response_model=PlatformStatsResponse)
+async def get_platform_stats(db: AsyncSession = Depends(get_db)):
+    """
+    Get aggregated platform statistics for dashboard & metrics overview.
+    """
+    # Total problems
+    prob_res = await db.execute(select(func.count(Problem.problem_id)))
+    total_problems = prob_res.scalar() or 0
+
+    # Total sessions
+    sess_res = await db.execute(select(func.count(Session.session_id)))
+    total_sessions = sess_res.scalar() or 0
+
+    # Total recommendations
+    rec_res = await db.execute(select(func.count(RecommendationHistory.id)))
+    total_recommendations = rec_res.scalar() or 0
+
+    # Completed evaluations
+    comp_res = await db.execute(
+        select(func.count(Session.session_id)).where(Session.status == "complete")
+    )
+    completed_evaluations = comp_res.scalar() or 0
+
+    # Average score
+    score_res = await db.execute(
+        select(func.avg(AnalysisResult.final_score)).where(AnalysisResult.final_score.isnot(None))
+    )
+    avg_score_raw = score_res.scalar()
+    average_score = round(float(avg_score_raw), 1) if avg_score_raw is not None else 0.0
+
+    # Language breakdown
+    lang_res = await db.execute(
+        select(Session.language, func.count(Session.session_id)).group_by(Session.language)
+    )
+    language_breakdown = {lang: count for lang, count in lang_res.all()}
+
+    return PlatformStatsResponse(
+        total_problems=total_problems,
+        total_sessions=total_sessions,
+        total_evaluations=total_sessions,
+        total_recommendations=total_recommendations,
+        completed_evaluations=completed_evaluations,
+        average_score=average_score,
+        language_breakdown=language_breakdown,
+    )
 
 
 @router.post("", response_model=ProblemResponse)

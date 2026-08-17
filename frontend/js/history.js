@@ -178,7 +178,9 @@ const HistoryUI = {
 
             modal.classList.remove('hidden');
         } catch (err) {
-            alert(`Failed to load details: ${err.message}`);
+            if (typeof Toast !== 'undefined') {
+                Toast.error(`Failed to load details: ${err.message}`);
+            }
         }
     },
 
@@ -188,23 +190,36 @@ const HistoryUI = {
     },
 
     async deleteItem(itemId) {
-        if (!confirm('Are you sure you want to delete this history record?')) return;
         try {
             await ApiClient.deleteHistoryItem(itemId);
+            if (typeof Toast !== 'undefined') {
+                Toast.success('History entry deleted.');
+            }
             await this.load();
+            if (typeof App !== 'undefined') {
+                await App.refreshSidebar();
+            }
         } catch (err) {
-            alert(`Delete failed: ${err.message}`);
+            if (typeof Toast !== 'undefined') {
+                Toast.error(`Delete failed: ${err.message}`);
+            }
         }
     },
 
     exportDetailJson(data) {
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         downloadBlob(blob, `verdict_history_${data.id}_${Date.now()}.json`);
+        if (typeof Toast !== 'undefined') {
+            Toast.success('Record JSON exported.');
+        }
     },
 
     exportAllJson() {
         const blob = new Blob([JSON.stringify(this.items, null, 2)], { type: 'application/json' });
         downloadBlob(blob, `verdict_history_export_${Date.now()}.json`);
+        if (typeof Toast !== 'undefined') {
+            Toast.success('All history records exported.');
+        }
     },
 
     formatDate(isoStr) {

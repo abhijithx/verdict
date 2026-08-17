@@ -224,6 +224,11 @@ const ApiClient = {
             method: 'DELETE',
         });
     },
+
+    /** Get aggregated platform statistics */
+    async getPlatformStats() {
+        return this._fetch('/problems/stats');
+    },
 };
 
 // Utility: download a Blob as a file

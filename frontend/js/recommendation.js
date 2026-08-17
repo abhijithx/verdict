@@ -5,8 +5,47 @@
 const RecommendationUI = {
     currentResult: null,
 
+    templates: {
+        two_sum: {
+            problem: "Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target. You may assume that each input would have exactly one solution, and you may not use the same element twice.",
+            constraints: "2 <= nums.length <= 10^4\n-10^9 <= nums[i] <= 10^9\n-10^9 <= target <= 10^9\nOnly one valid answer exists.",
+            sample_input: "nums = [2,7,11,15], target = 9",
+            sample_output: "[0,1]"
+        },
+        longest_substring: {
+            problem: "Given a string s, find the length of the longest substring without duplicate characters.",
+            constraints: "0 <= s.length <= 5 * 10^4\ns consists of English letters, digits, symbols and spaces.",
+            sample_input: "s = \"abcabcbb\"",
+            sample_output: "3"
+        },
+        lru_cache: {
+            problem: "Design a data structure that follows the constraints of a Least Recently Used (LRU) cache with get(key) and put(key, value) operations running in O(1) average time complexity.",
+            constraints: "1 <= capacity <= 3000\n0 <= key <= 10^4\n0 <= value <= 10^5\nAt most 2 * 10^5 calls will be made to get and put.",
+            sample_input: "LRUCache(2), put(1, 1), put(2, 2), get(1), put(3, 3), get(2)",
+            sample_output: "[null, null, null, 1, null, -1]"
+        }
+    },
+
     async init() {
         console.log('[RecommendationUI] Initialized');
+    },
+
+    loadTemplate(templateKey) {
+        const t = this.templates[templateKey];
+        if (!t) return;
+        const pEl = document.getElementById('rec-problem');
+        const cEl = document.getElementById('rec-constraints');
+        const iEl = document.getElementById('rec-sample-input');
+        const oEl = document.getElementById('rec-sample-output');
+
+        if (pEl) pEl.value = t.problem;
+        if (cEl) cEl.value = t.constraints;
+        if (iEl) iEl.value = t.sample_input;
+        if (oEl) oEl.value = t.sample_output;
+
+        if (typeof Toast !== 'undefined') {
+            Toast.info(`Loaded "${templateKey.replace('_', ' ').toUpperCase()}" sample template.`);
+        }
     },
 
     async analyze() {
@@ -17,7 +56,9 @@ const RecommendationUI = {
         const language = document.getElementById('rec-language')?.value || null;
 
         if (!problem) {
-            alert('Please enter a programming problem description.');
+            if (typeof Toast !== 'undefined') {
+                Toast.warning('Please enter a programming problem description.');
+            }
             return;
         }
 
@@ -45,9 +86,15 @@ const RecommendationUI = {
 
             this.currentResult = data;
             this.renderReport(data);
+            if (typeof Toast !== 'undefined') {
+                Toast.success('Solution recommendation generated!');
+            }
 
         } catch (error) {
             console.error('[RecommendationUI] Error:', error);
+            if (typeof Toast !== 'undefined') {
+                Toast.error(`Analysis failed: ${error.message}`);
+            }
             const emptyState = document.getElementById('rec-empty-state');
             if (emptyState) {
                 emptyState.classList.remove('hidden');
@@ -157,6 +204,9 @@ const RecommendationUI = {
         if (btn) {
             const originalText = btn.innerHTML;
             btn.innerHTML = `✓ Copied!`;
+            if (typeof Toast !== 'undefined') {
+                Toast.success('Reference code copied to clipboard!');
+            }
             setTimeout(() => btn.innerHTML = originalText, 2000);
         }
     },
@@ -165,6 +215,9 @@ const RecommendationUI = {
         if (!this.currentResult) return;
         const blob = new Blob([JSON.stringify(this.currentResult, null, 2)], { type: 'application/json' });
         downloadBlob(blob, `verdict_recommendation_${Date.now()}.json`);
+        if (typeof Toast !== 'undefined') {
+            Toast.success('Recommendation JSON downloaded.');
+        }
     },
 
     escapeHtml(str) {

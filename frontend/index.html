@@ -187,10 +187,29 @@
                             <button onclick="App.switchView('recommendation')" class="cmd-btn cmd-ghost text-accent !px-0 !justify-start mt-6 text-sm">
                                 Explore
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                            </button>
+            <!-- Live Platform Metrics -->
+            <div class="px-8 md:px-12 pb-12">
+                <div class="animate-fade-up">
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="panel p-5 border border-border-subtle">
+                            <span class="text-[11px] font-mono uppercase text-text-tertiary tracking-wider block">Problems Catalog</span>
+                            <span id="stat-problems" class="text-2xl font-bold font-display text-text-primary mt-1 block">--</span>
+                        </div>
+                        <div class="panel p-5 border border-border-subtle">
+                            <span class="text-[11px] font-mono uppercase text-text-tertiary tracking-wider block">Evaluations Run</span>
+                            <span id="stat-sessions" class="text-2xl font-bold font-display text-text-primary mt-1 block">--</span>
+                        </div>
+                        <div class="panel p-5 border border-border-subtle">
+                            <span class="text-[11px] font-mono uppercase text-text-tertiary tracking-wider block">Recommendations</span>
+                            <span id="stat-recommendations" class="text-2xl font-bold font-display text-text-primary mt-1 block">--</span>
+                        </div>
+                        <div class="panel p-5 border border-border-subtle">
+                            <span class="text-[11px] font-mono uppercase text-text-tertiary tracking-wider block">Avg Score</span>
+                            <span id="stat-score" class="text-2xl font-bold font-display text-accent mt-1 block">--</span>
                         </div>
                     </div>
                 </div>
+            </div>
         </section>
 
 
@@ -211,8 +230,16 @@
                     <div class="lg:col-span-2 space-y-6">
                         <div class="panel p-6 space-y-5">
                             <div>
-                                <label class="field-label">Problem Statement <span class="text-danger">*</span></label>
-                                <textarea id="rec-problem" rows="5" placeholder="Describe the programming problem in detail. For example: Find the length of the longest substring without repeating characters..." class="field-input resize-none thin-scroll mt-2"></textarea>
+                                <div class="flex items-center justify-between mb-2">
+                                    <label class="field-label !mb-0">Problem Statement <span class="text-danger">*</span></label>
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="text-[11px] text-text-tertiary font-mono mr-1">Templates:</span>
+                                        <button onclick="RecommendationUI.loadTemplate('two_sum')" class="px-2 py-0.5 text-[10px] font-mono rounded bg-raised border border-border-subtle hover:border-accent text-text-secondary">Two Sum</button>
+                                        <button onclick="RecommendationUI.loadTemplate('longest_substring')" class="px-2 py-0.5 text-[10px] font-mono rounded bg-raised border border-border-subtle hover:border-accent text-text-secondary">Substring</button>
+                                        <button onclick="RecommendationUI.loadTemplate('lru_cache')" class="px-2 py-0.5 text-[10px] font-mono rounded bg-raised border border-border-subtle hover:border-accent text-text-secondary">LRU</button>
+                                    </div>
+                                </div>
+                                <textarea id="rec-problem" rows="5" placeholder="Describe the programming problem in detail. For example: Find the length of the longest substring without repeating characters..." class="field-input resize-none thin-scroll mt-1"></textarea>
                             </div>
 
                             <div class="grid grid-cols-1 gap-4">
@@ -370,16 +397,26 @@
 
             <!-- Center: Editor -->
             <main id="center-panel" class="flex-1 flex flex-col min-w-0">
-                <div id="editor-tabs" class="h-10 bg-raised border-b border-border-subtle flex items-end px-2 gap-0">
-                    <button id="tab-python" class="ed-tab active" onclick="MonacoSetup.switchLanguage('python')" data-lang="python">
-                        <span class="ed-tab-dot bg-[#3572A5]"></span>main.py
-                    </button>
-                    <button id="tab-cpp" class="ed-tab" onclick="MonacoSetup.switchLanguage('cpp')" data-lang="cpp" style="display: none;">
-                        <span class="ed-tab-dot bg-[#f34b7d]"></span>main.cpp
-                    </button>
-                    <button id="tab-java" class="ed-tab" onclick="MonacoSetup.switchLanguage('java')" data-lang="java" style="display: none;">
-                        <span class="ed-tab-dot bg-[#b07219]"></span>Main.java
-                    </button>
+                <div id="editor-tabs" class="h-10 bg-raised border-b border-border-subtle flex items-center justify-between px-2">
+                    <div class="flex items-end gap-0 h-full">
+                        <button id="tab-python" class="ed-tab active" onclick="MonacoSetup.switchLanguage('python')" data-lang="python">
+                            <span class="ed-tab-dot bg-[#3572A5]"></span>main.py
+                        </button>
+                        <button id="tab-cpp" class="ed-tab" onclick="MonacoSetup.switchLanguage('cpp')" data-lang="cpp" style="display: none;">
+                            <span class="ed-tab-dot bg-[#f34b7d]"></span>main.cpp
+                        </button>
+                        <button id="tab-java" class="ed-tab" onclick="MonacoSetup.switchLanguage('java')" data-lang="java" style="display: none;">
+                            <span class="ed-tab-dot bg-[#b07219]"></span>Main.java
+                        </button>
+                    </div>
+                    <div class="flex items-center gap-1.5 py-1">
+                        <button onclick="MonacoSetup.formatCode()" class="px-2 py-1 text-[11px] font-mono rounded text-text-tertiary hover:text-text-primary hover:bg-surface border border-transparent hover:border-border-subtle" title="Format Code">
+                            Format
+                        </button>
+                        <button onclick="MonacoSetup.resetCode()" class="px-2 py-1 text-[11px] font-mono rounded text-text-tertiary hover:text-danger hover:bg-danger/10 border border-transparent hover:border-danger/20" title="Reset to template">
+                            Reset
+                        </button>
+                    </div>
                 </div>
 
                 <div id="editor-container" class="flex-1 min-h-0"></div>
@@ -646,6 +683,9 @@
         </div>
     </div>
 
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="toast-container"></div>
 
     <!-- ======== SCRIPTS ======== -->
     <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>

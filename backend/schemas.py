@@ -9,7 +9,7 @@ These schemas handle:
 Each schema class documents its purpose and which endpoint(s) use it.
 """
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
@@ -22,9 +22,10 @@ from enum import Enum
 class SessionStatus(str, Enum):
     """
     Pipeline status for a session. Progresses linearly:
-    pending → generating_tests → executing → analyzing → complete
+    draft / pending → generating_tests → executing → analyzing → complete
     Can branch to dry_run_failed, dry_run_passed, or failed at any stage.
     """
+    DRAFT = "draft"
     PENDING = "pending"
     DRY_RUN_FAILED = "dry_run_failed"
     DRY_RUN_PASSED = "dry_run_passed"
@@ -112,9 +113,7 @@ class EvaluationProfileResponse(BaseModel):
     readability_weight: float
     documentation_weight: float
     created_at: datetime
-
-    class Config:
-        from_attributes = True  # Allow ORM model → Pydantic conversion
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ============================================================================
@@ -136,9 +135,7 @@ class ProblemResponse(BaseModel):
     difficulty: str
     created_at: datetime
     session_count: Optional[int] = 0  # Number of submissions for this problem
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ============================================================================
@@ -176,9 +173,7 @@ class DryRunResultResponse(BaseModel):
     stderr: Optional[str] = None
     error_line: Optional[int] = None
     created_at: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TestCaseResponse(BaseModel):
@@ -190,9 +185,7 @@ class TestCaseResponse(BaseModel):
     expected_stdout: str
     is_edge_case: bool
     created_at: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ExecutionResultResponse(BaseModel):
@@ -203,9 +196,7 @@ class ExecutionResultResponse(BaseModel):
     actual_stdout: Optional[str] = None
     stderr: Optional[str] = None
     time_ms: Optional[float] = None
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TestResultDetail(BaseModel):
@@ -260,9 +251,7 @@ class AnalysisResultResponse(BaseModel):
     documentation_score: Optional[int] = None
     final_score: Optional[int] = None
     evaluated_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SessionResponse(BaseModel):
@@ -288,9 +277,7 @@ class SessionResponse(BaseModel):
     dry_run: Optional[DryRunResultResponse] = None
     test_results: Optional[List[TestResultDetail]] = None
     analysis: Optional[AnalysisResultResponse] = None
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ============================================================================
@@ -458,4 +445,15 @@ class HistoryItemSummary(BaseModel):
 class HistoryListResponse(BaseModel):
     """List response for platform history."""
     items: List[HistoryItemSummary]
+
+
+class PlatformStatsResponse(BaseModel):
+    """Aggregated platform statistics for dashboard and overview."""
+    total_problems: int = 0
+    total_sessions: int = 0
+    total_evaluations: int = 0
+    total_recommendations: int = 0
+    completed_evaluations: int = 0
+    average_score: float = 0.0
+    language_breakdown: dict = {}
 

@@ -56,9 +56,15 @@ const EvaluationProfileUI = {
 
     async save() {
         const name = (document.getElementById('custom-profile-name')?.value || '').trim();
-        if (!name) return alert('Enter a profile name.');
+        if (!name) {
+            if (typeof Toast !== 'undefined') Toast.warning('Please enter a profile name.');
+            return;
+        }
         const total = Object.values(this._weights).reduce((s,v)=>s+v,0);
-        if (total !== 100) return alert(`Weights must sum to 100% (currently ${total}%).`);
+        if (total !== 100) {
+            if (typeof Toast !== 'undefined') Toast.warning(`Weights must sum to 100% (currently ${total}%).`);
+            return;
+        }
 
         try {
             const weights = {};
@@ -75,8 +81,10 @@ const EvaluationProfileUI = {
                 sel.value = profile.profile_id;
             }
             document.getElementById('custom-profile-panel')?.classList.add('hidden');
-            alert(`Profile "${name}" saved.`);
-        } catch (e) { alert(`Failed: ${e.message}`); }
+            if (typeof Toast !== 'undefined') Toast.success(`Profile "${name}" created and selected.`);
+        } catch (e) {
+            if (typeof Toast !== 'undefined') Toast.error(`Failed to save profile: ${e.message}`);
+        }
     },
 
     getWeights() {

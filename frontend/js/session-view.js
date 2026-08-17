@@ -66,13 +66,16 @@ const SessionView = {
                 App.switchBottomTab('output');
                 document.getElementById('btn-export-pdf')?.classList.add('hidden');
             } else {
-                // Reset chat thread for new/unsubmitted session
+                // Reset chat thread for new/unsubmitted or draft session
                 const chatThread = document.getElementById('chat-thread');
                 if (chatThread) {
                     chatThread.innerHTML = `
                         <div class="feed-card">
                             <p class="text-[13px] text-text-secondary">Welcome to <span class="font-semibold text-text-primary">Solution Evaluation</span>.</p>
-                            <p class="text-[12px] text-text-tertiary mt-1.5 leading-relaxed">Submit your code to execute against verified AI-generated test cases and receive a score breakdown.</p>
+                            <p class="text-[12px] text-text-tertiary mt-1.5 leading-relaxed">Write or paste your implementation, then click <strong class="text-text-primary">Run</strong> or <strong class="text-text-primary">Submit Evaluation</strong>.</p>
+                            <div class="mt-3 flex items-center gap-2">
+                                <span class="kbd-shortcut">Ctrl</span> + <span class="kbd-shortcut">↵</span> to run
+                            </div>
                         </div>
                     `;
                 }
@@ -84,7 +87,7 @@ const SessionView = {
 
         } catch (err) {
             console.error('[SessionView] Failed to load session:', err);
-            alert(`Failed to load session: ${err.message}`);
+            Toast.error(`Failed to load session: ${err.message}`);
         }
     },
 
@@ -93,9 +96,15 @@ const SessionView = {
     },
 
     async dryRun() {
-        if (!this._sessionId) return alert('No active session. Please select or create a session.');
+        if (!this._sessionId) {
+            Toast.warning('No active session. Please create or select a session first.');
+            return;
+        }
         const code = this.getEditorCode();
-        if (!code.trim()) return alert('Editor is empty.');
+        if (!code.trim()) {
+            Toast.warning('Editor is empty. Write some code first.');
+            return;
+        }
 
         const btn = document.getElementById('btn-dry-run');
         btn.disabled = true;
@@ -105,8 +114,13 @@ const SessionView = {
             const result = await ApiClient.dryRunSession(this._sessionId, code);
             this._renderDryRun(result);
             App.switchBottomTab('output');
+            if (result.passed) {
+                Toast.success('Dry run passed! No syntax or runtime errors.');
+            } else {
+                Toast.error('Dry run failed. See error output below.');
+            }
         } catch (err) {
-            alert(`Dry run failed: ${err.message}`);
+            Toast.error(`Dry run failed: ${err.message}`);
         } finally {
             btn.disabled = false;
             btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg> Run`;
@@ -155,9 +169,15 @@ const SessionView = {
     },
 
     async submit() {
-        if (!this._sessionId) return alert('No active session. Please select or create a session.');
+        if (!this._sessionId) {
+            Toast.warning('No active session. Please create or select a session first.');
+            return;
+        }
         const code = this.getEditorCode();
-        if (!code.trim()) return alert('Editor is empty.');
+        if (!code.trim()) {
+            Toast.warning('Editor is empty. Please enter your code before submitting.');
+            return;
+        }
 
         const btn = document.getElementById('btn-submit');
         btn.disabled = true;
@@ -170,9 +190,10 @@ const SessionView = {
 
         try {
             await ApiClient.submitSession(this._sessionId, code);
+            Toast.info('Evaluation pipeline launched! Running verification...');
             this._pollPipeline(this._sessionId);
         } catch (err) {
-            alert(`Evaluation failed to start: ${err.message}`);
+            Toast.error(`Evaluation failed to start: ${err.message}`);
             btn.disabled = false;
             btn.innerHTML = 'Submit Evaluation';
             if (statusEl) { statusEl.classList.add('hidden'); statusEl.classList.remove('flex'); }
@@ -216,8 +237,8 @@ const SessionView = {
                         this._renderEvaluation(session);
                         App.switchBottomTab('test-results');
                         document.getElementById('btn-export-pdf')?.classList.remove('hidden');
+                        Toast.success(`Evaluation complete! Score: ${session.analysis?.final_score || 0}/100`);
                     } else if (session.status === 'dry_run_failed') {
-                        // Show dry-run error details instead of generic alert
                         if (session.dry_run) {
                             this._renderDryRun(session.dry_run);
                         }
@@ -231,8 +252,9 @@ const SessionView = {
                                 </div>
                             `;
                         }
+                        Toast.error('Dry run failed. Check diagnostics in Output tab.');
                     } else {
-                        alert(`Evaluation failed. Check Output tab for details.`);
+                        Toast.error('Evaluation pipeline failed. Check Output tab for details.');
                     }
 
                     await App.refreshSidebar();
@@ -290,6 +312,18 @@ const SessionView = {
                 </div>`;
         }
         html += `</div>`;
+
+        // Chart.js Complexity Visualization
+        if (analysis.complexity_chart && analysis.complexity_chart.labels && analysis.complexity_chart.labels.length > 0) {
+            html += `
+                <div class="mb-3">
+                    <div class="feed-section-label">Complexity Visualizer</div>
+                    <div class="chart-card">
+                        <canvas id="complexity-chart-canvas"></canvas>
+                    </div>
+                </div>
+            `;
+        }
 
         if (analysis.code_explanation) {
             html += `<div class="mb-3"><div class="feed-section-label">Code Explanation</div><p class="text-[12px] text-text-secondary leading-relaxed">${this._esc(analysis.code_explanation)}</p></div>`;
@@ -357,14 +391,25 @@ const SessionView = {
 
         chatThread.innerHTML = html;
         chatThread.scrollTop = chatThread.scrollHeight;
+
+        // Render Chart.js complexity chart if canvas exists
+        setTimeout(() => {
+            if (analysis.complexity_chart && typeof Charts !== 'undefined') {
+                Charts.renderComplexityChart('complexity-chart-canvas', analysis.complexity_chart);
+            }
+        }, 50);
     },
 
     async exportPdf() {
         if (!this._sessionId) return;
         try {
+            Toast.info('Generating session PDF report...');
             const blob = await ApiClient.exportSessionPdf(this._sessionId);
             downloadBlob(blob, `verdict_session_${this._sessionId}.pdf`);
-        } catch (e) { alert(`Export failed: ${e.message}`); }
+            Toast.success('PDF report downloaded successfully.');
+        } catch (e) {
+            Toast.error(`Export failed: ${e.message}`);
+        }
     },
 
     _esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; },

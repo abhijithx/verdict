@@ -61,9 +61,13 @@ const Leaderboard = {
     async exportPdf() {
         if (!this._currentProblemId) return;
         try {
+            if (typeof Toast !== 'undefined') Toast.info('Generating leaderboard PDF...');
             const blob = await ApiClient.exportLeaderboardPdf(this._currentProblemId);
             downloadBlob(blob, `leaderboard_${this._currentProblemId}.pdf`);
-        } catch (e) { alert(`Export failed: ${e.message}`); }
+            if (typeof Toast !== 'undefined') Toast.success('Leaderboard PDF downloaded.');
+        } catch (e) {
+            if (typeof Toast !== 'undefined') Toast.error(`Export failed: ${e.message}`);
+        }
     },
 
     _esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; },

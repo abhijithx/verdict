@@ -304,13 +304,19 @@ class PistonClient:
             )
 
         elapsed_ms = (time.time() - start_time) * 1000
+        compile_result = result.get("compile", {})
+        compile_stderr = compile_result.get("stderr", "").strip() if compile_result else ""
         run_result = result.get("run", {})
-        actual_stdout = run_result.get("stdout", "")
-        stderr = run_result.get("stderr", "")
+        actual_stdout = run_result.get("stdout", "") if run_result else ""
+        run_stderr = run_result.get("stderr", "").strip() if run_result else ""
+        
+        # Combine compile errors and runtime errors so nothing is lost
+        stderr = (compile_stderr + ("\n" if compile_stderr and run_stderr else "") + run_stderr).strip()
 
-        actual_clean = actual_stdout.rstrip()
-        expected_clean = expected_stdout.rstrip()
-        passed = (actual_clean == expected_clean)
+        # Robust whitespace & line-ending normalized comparison
+        actual_clean = "\n".join(line.rstrip() for line in (actual_stdout or "").replace("\r\n", "\n").strip().splitlines())
+        expected_clean = "\n".join(line.rstrip() for line in (expected_stdout or "").replace("\r\n", "\n").strip().splitlines())
+        passed = (actual_clean == expected_clean) and (not compile_stderr)
 
         return TestExecutionResult(
             test_id=test_id,

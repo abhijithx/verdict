@@ -106,7 +106,7 @@ class Session(Base):
     submission_label = Column(String(255), nullable=False)          # e.g., "Candidate A", "Attempt 1"
     language = Column(String(20), nullable=False)                   # python / cpp / java
     code = Column(Text, nullable=False)                             # The submitted source code
-    status = Column(String(30), default="pending")                  # Pipeline status (see docstring)
+    status = Column(String(30), default="draft")                    # Pipeline status (draft/pending/generating_tests/executing/analyzing/complete/failed)
     history_summary = Column(Text, nullable=True)                   # Compressed prior-turn context
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc),

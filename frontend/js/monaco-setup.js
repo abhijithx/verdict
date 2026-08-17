@@ -113,7 +113,7 @@ const MonacoSetup = {
                     language: MONACO_LANG_MAP[activeLang] || 'python',
                     theme: 'verdict-dark',
                     fontSize: 13,
-                    fontFamily: "'IBM Plex Mono', 'Consolas', monospace",
+                    fontFamily: "'JetBrains Mono', 'Fira Code', 'Consolas', monospace",
                     fontLigatures: true,
                     minimap: { enabled: true, scale: 1 },
                     scrollBeyondLastLine: false,
@@ -133,6 +133,21 @@ const MonacoSetup = {
                     },
                     bracketPairColorization: { enabled: true },
                 });
+
+                // Add Ctrl+Enter / Cmd+Enter shortcut to run/submit
+                editorInstance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, function () {
+                    if (typeof SessionView !== 'undefined' && SessionView.dryRun) {
+                        SessionView.dryRun();
+                    }
+                });
+
+                // Attach ResizeObserver for seamless responsive layout
+                if (window.ResizeObserver && container) {
+                    const ro = new ResizeObserver(() => {
+                        editorInstance.layout();
+                    });
+                    ro.observe(container);
+                }
 
                 window.monacoEditor = editorInstance;
                 MonacoSetup.switchLanguage(activeLang);
@@ -156,6 +171,24 @@ const MonacoSetup = {
         const ed = this.getEditor();
         if (ed) {
             ed.setValue(code);
+        }
+    },
+
+    resetCode() {
+        const activeLang = this._currentLanguage || 'python';
+        this.setCode(BOILERPLATES[activeLang] || '');
+        if (typeof Toast !== 'undefined') {
+            Toast.info(`Reset code to ${activeLang.toUpperCase()} boilerplate template.`);
+        }
+    },
+
+    formatCode() {
+        const ed = this.getEditor();
+        if (ed) {
+            ed.getAction('editor.action.formatDocument')?.run();
+            if (typeof Toast !== 'undefined') {
+                Toast.info('Formatted document.');
+            }
         }
     },
 
