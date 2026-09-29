@@ -370,34 +370,62 @@
              ==================================================================== -->
         <section id="view-evaluation" class="h-full flex min-w-0 hidden">
             <!-- Sidebar -->
-            <aside id="sidebar" class="w-[280px] bg-surface border-r border-border-subtle flex flex-col shrink-0">
+            <aside id="sidebar" class="eval-sidebar bg-surface border-r border-border-subtle flex flex-col shrink-0">
                 <div class="p-4 border-b border-border-subtle">
-                    <button id="btn-new-session" class="w-full h-10 rounded-xl text-[13px] font-medium transition-all duration-200 flex items-center justify-center gap-2 bg-accent text-void hover:brightness-110 active:scale-[0.97]" onclick="NewSessionModal.open()">
+                    <button id="btn-new-session" class="eval-new-session-btn" onclick="NewSessionModal.open()">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                        New Session
+                        + New Session
                     </button>
                 </div>
 
                 <div class="px-4 py-3 border-b border-border-subtle">
-                    <select id="sidebar-problem-filter" class="w-full bg-void border border-border-soft rounded-lg text-[13px] text-text-secondary py-2 px-3 focus:outline-none focus:border-accent/40 appearance-none cursor-pointer" onchange="App.filterSessions(this.value)">
-                        <option value="all">All Problems</option>
-                    </select>
+                    <div class="eval-filter-wrapper">
+                        <svg class="eval-filter-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                        <select id="sidebar-problem-filter" class="eval-filter-select" onchange="App.filterSessions(this.value)">
+                            <option value="all">All Problems</option>
+                        </select>
+                    </div>
                 </div>
 
                 <div id="session-list" class="flex-1 overflow-y-auto thin-scroll">
                     <div id="session-list-empty" class="flex flex-col items-center justify-center h-full px-6 py-12">
-                        <div class="empty-state-icon">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-text-tertiary"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        <div class="eval-empty-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-text-tertiary"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="12" x2="12" y2="18"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
                         </div>
                         <p class="text-text-secondary text-[14px] font-medium mb-1">No sessions yet</p>
-                        <p class="text-text-tertiary text-[12px] text-center">Create a session to begin.</p>
+                        <p class="text-text-tertiary text-[12px] text-center leading-relaxed">Click <strong class="text-text-secondary">+ New Session</strong> above to start evaluating your code.</p>
                     </div>
                 </div>
             </aside>
 
-            <!-- Center: Editor -->
+            <!-- Center: Editor + Bottom Panel + Action Bar -->
             <main id="center-panel" class="flex-1 flex flex-col min-w-0">
-                <div id="editor-tabs" class="h-10 bg-raised border-b border-border-subtle flex items-center justify-between px-2">
+                <!-- Session Info Bar -->
+                <div id="session-info-bar" class="eval-info-bar">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <span id="session-lang-badge" class="eval-lang-badge" data-lang="python">
+                            <span class="eval-lang-dot bg-[#3572A5]"></span>Python
+                        </span>
+                        <span id="session-info-label" class="eval-info-label">No session selected</span>
+                        <span id="session-info-status" class="eval-status-chip">
+                            <span class="eval-status-dot"></span>
+                            <span id="session-info-status-text">Ready</span>
+                        </span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="MonacoSetup.formatCode()" class="eval-toolbar-btn" title="Format Code (Shift+Alt+F)">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10H7"/><path d="M21 6H3"/><path d="M21 14H3"/><path d="M21 18H7"/></svg>
+                            Format
+                        </button>
+                        <button onclick="MonacoSetup.resetCode()" class="eval-toolbar-btn eval-toolbar-btn-danger" title="Reset to boilerplate">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                            Reset
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Editor Tabs (hidden, managed by language badge now) -->
+                <div id="editor-tabs" class="h-9 bg-raised border-b border-border-subtle flex items-center px-2" style="display:none;">
                     <div class="flex items-end gap-0 h-full">
                         <button id="tab-python" class="ed-tab active" onclick="MonacoSetup.switchLanguage('python')" data-lang="python">
                             <span class="ed-tab-dot bg-[#3572A5]"></span>main.py
@@ -409,68 +437,117 @@
                             <span class="ed-tab-dot bg-[#b07219]"></span>Main.java
                         </button>
                     </div>
-                    <div class="flex items-center gap-1.5 py-1">
-                        <button onclick="MonacoSetup.formatCode()" class="px-2 py-1 text-[11px] font-mono rounded text-text-tertiary hover:text-text-primary hover:bg-surface border border-transparent hover:border-border-subtle" title="Format Code">
-                            Format
-                        </button>
-                        <button onclick="MonacoSetup.resetCode()" class="px-2 py-1 text-[11px] font-mono rounded text-text-tertiary hover:text-danger hover:bg-danger/10 border border-transparent hover:border-danger/20" title="Reset to template">
-                            Reset
-                        </button>
-                    </div>
                 </div>
 
+                <!-- Monaco Editor -->
                 <div id="editor-container" class="flex-1 min-h-0"></div>
 
-                <div id="bottom-panel" class="h-64 min-h-[80px] bg-raised border-t border-border-subtle flex flex-col">
-                    <div class="h-9 border-b border-border-subtle flex items-center px-2 gap-0">
-                        <button class="btm-tab active" data-panel="problems" onclick="App.switchBottomTab('problems')">Problems</button>
-                        <button class="btm-tab" data-panel="output" onclick="App.switchBottomTab('output')">Output</button>
-                        <button class="btm-tab" data-panel="test-results" onclick="App.switchBottomTab('test-results')">Tests</button>
+                <!-- Bottom Panel: Problems / Output / Tests -->
+                <div id="bottom-panel" class="eval-bottom-panel">
+                    <div class="eval-bottom-tabs">
+                        <div class="flex items-center gap-0 h-full">
+                            <button class="eval-btm-tab active" data-panel="problems" onclick="App.switchBottomTab('problems')">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                Problems
+                            </button>
+                            <button class="eval-btm-tab" data-panel="output" onclick="App.switchBottomTab('output')">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                                Output
+                            </button>
+                            <button class="eval-btm-tab" data-panel="test-results" onclick="App.switchBottomTab('test-results')">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                                Tests
+                                <span id="test-results-count" class="eval-test-count hidden">0/0</span>
+                            </button>
+                        </div>
+                        <div id="btm-panel-collapse" class="eval-btm-collapse" onclick="SessionView.toggleBottomPanel()" title="Toggle panel">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 15l-6-6-6 6"/></svg>
+                        </div>
                     </div>
-                    <div class="flex-1 overflow-y-auto thin-scroll p-4">
+                    <div class="eval-bottom-content thin-scroll">
                         <div id="panel-problems" class="btm-content active">
-                            <p class="text-text-secondary text-[13px]">No diagnostics. Write code and submit.</p>
+                            <div class="eval-panel-empty">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-text-dim"><circle cx="12" cy="12" r="10"/><path d="M9 12l2 2 4-4"/></svg>
+                                <span>No diagnostics. Write code and submit.</span>
+                            </div>
                         </div>
                         <div id="panel-output" class="btm-content hidden">
-                            <pre id="output-content" class="text-text-secondary text-[13px] font-mono whitespace-pre-wrap leading-relaxed">No output.</pre>
+                            <pre id="output-content" class="eval-output-pre">Run your code to see output here.</pre>
                         </div>
                         <div id="panel-test-results" class="btm-content hidden">
-                            <p class="text-text-secondary text-[13px]">Submit code to generate and execute test cases.</p>
+                            <div class="eval-panel-empty">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-text-dim"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                                <span>Submit your code to generate and execute AI-verified test cases.</span>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <div id="action-bar" class="h-12 bg-surface border-t border-border-subtle flex items-center justify-between px-4">
-                    <div class="flex items-center gap-2">
-                        <button id="btn-dry-run" class="cmd-btn cmd-ghost" onclick="SessionView.dryRun()">
+                <!-- Action Bar -->
+                <div id="action-bar" class="eval-action-bar">
+                    <div class="flex items-center gap-3">
+                        <button id="btn-dry-run" class="eval-run-btn" onclick="SessionView.dryRun()">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
-                            Run
+                            ▶ Run
                         </button>
-                        <button id="btn-submit" class="cmd-btn cmd-primary" onclick="SessionView.submit()">
+                        <button id="btn-submit" class="eval-submit-btn" onclick="SessionView.submit()">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
                             Submit Evaluation
                         </button>
                     </div>
                     <div class="flex items-center gap-2">
-                        <button id="btn-export-pdf" class="cmd-btn cmd-ghost hidden" onclick="SessionView.exportPdf()">
+                        <span id="action-bar-shortcut" class="eval-shortcut-hint">
+                            <kbd>Ctrl</kbd>+<kbd>Enter</kbd> to run
+                        </span>
+                        <button id="btn-export-pdf" class="eval-export-btn hidden" onclick="SessionView.exportPdf()">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                             Export PDF
                         </button>
                     </div>
                 </div>
             </main>
 
-            <!-- Right: Analysis -->
-            <aside id="right-panel" class="w-[380px] bg-surface border-l border-border-subtle flex flex-col shrink-0">
-                <div id="problem-header" class="px-5 py-4 border-b border-border-subtle">
-                    <span class="text-[11px] font-semibold text-text-tertiary uppercase tracking-[0.15em] block mb-2">Problem Statement</span>
-                    <div id="problem-description" class="text-[13px] text-text-secondary max-h-[200px] overflow-y-auto thin-scroll leading-relaxed">
-                        <p class="text-text-tertiary italic">Create a session to begin evaluation.</p>
+            <!-- Right: Analysis Panel -->
+            <aside id="right-panel" class="eval-right-panel bg-surface border-l border-border-subtle flex flex-col shrink-0">
+                <!-- Problem Statement (collapsible) -->
+                <div id="problem-header" class="eval-problem-header">
+                    <button class="eval-problem-toggle" onclick="SessionView.toggleProblem()">
+                        <div class="flex items-center gap-2">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-accent"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                            <span class="text-[11px] font-semibold text-text-tertiary uppercase tracking-[0.15em]">Problem Statement</span>
+                        </div>
+                        <svg id="problem-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-text-dim eval-chevron"><path d="M6 9l6 6 6-6"/></svg>
+                    </button>
+                    <div id="problem-description" class="eval-problem-body">
+                        <div class="eval-problem-placeholder">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-text-dim"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                            <p class="text-text-tertiary text-[13px]">Select or create a session to view the problem.</p>
+                        </div>
                     </div>
                 </div>
 
+                <!-- Analysis Feed -->
                 <div id="chat-thread" class="flex-1 overflow-y-auto thin-scroll px-5 py-4 space-y-3">
-                    <div class="feed-card">
-                        <p class="text-[13px] text-text-secondary">Welcome to <span class="font-semibold text-text-primary">Solution Evaluation</span>.</p>
-                        <p class="text-[12px] text-text-tertiary mt-1.5 leading-relaxed">Submit your code to execute against verified AI-generated test cases and receive a score breakdown.</p>
+                    <div class="eval-welcome-card">
+                        <div class="eval-welcome-icon">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>
+                        </div>
+                        <h4 class="text-[14px] font-medium text-text-primary mb-1.5">Solution Evaluation</h4>
+                        <p class="text-[12px] text-text-tertiary leading-relaxed">Write or paste your code, then click <strong class="text-text-secondary">▶ Run</strong> to dry-check or <strong class="text-accent">Submit Evaluation</strong> for full AI-powered analysis.</p>
+                        <div class="eval-welcome-steps">
+                            <div class="eval-step">
+                                <span class="eval-step-num">1</span>
+                                <span class="eval-step-text">Write your solution</span>
+                            </div>
+                            <div class="eval-step">
+                                <span class="eval-step-num">2</span>
+                                <span class="eval-step-text">Run to check syntax</span>
+                            </div>
+                            <div class="eval-step">
+                                <span class="eval-step-num">3</span>
+                                <span class="eval-step-text">Submit for AI evaluation</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </aside>

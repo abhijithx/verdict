@@ -28,27 +28,27 @@ async def _call_gemini(
     temperature: float = 0.2
 ) -> str:
     """Call Google Gemini API and return raw response text."""
-    import google.generativeai as genai
+    from google import genai
+    from google.genai import types
 
     if not settings.GEMINI_API_KEY:
         raise AIProviderError("GEMINI_API_KEY not configured")
 
-    genai.configure(api_key=settings.GEMINI_API_KEY)
+    client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
-    model = genai.GenerativeModel(
-        model_name=settings.GEMINI_MODEL,
-        system_instruction=system_instruction
-    )
-
-    response = await asyncio.to_thread(
-        model.generate_content,
-        prompt,
-        generation_config=genai.GenerationConfig(
-            response_mime_type="application/json",
-            temperature=temperature,
+    def _sync_call():
+        response = client.models.generate_content(
+            model=settings.GEMINI_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=system_instruction,
+                response_mime_type="application/json",
+                temperature=temperature,
+            ),
         )
-    )
-    return response.text.strip()
+        return response.text.strip()
+
+    return await asyncio.to_thread(_sync_call)
 
 
 async def _call_groq(

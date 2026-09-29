@@ -322,7 +322,7 @@ class GeminiTestCase(BaseModel):
 class GeminiFirstResponse(BaseModel):
     """Parsed response from Gemini 'first' call (test generation)."""
     response_type: str = "first"
-    problem_understanding: str
+    problem_understanding: str = ""
     clarifications_needed: List[str] = []
     test_cases: List[GeminiTestCase]
     notes: str = ""
