@@ -150,7 +150,7 @@ const HistoryUI = {
                         </div>
                         <div>
                             <h4 class="font-semibold text-text-secondary mb-1">Optimized Solution (${detail.preferred_language})</h4>
-                            <pre class="bg-canvas p-3 rounded-lg border border-border-subtle font-mono text-2xs text-blue-0 whitespace-pre-wrap overflow-x-auto">${this.escapeHtml(detail.optimized_code)}</pre>
+                            <pre class="bg-canvas p-3 rounded-lg border border-border-subtle font-mono text-2xs text-text-primary whitespace-pre-wrap overflow-x-auto">${this.escapeHtml(detail.optimized_code)}</pre>
                         </div>
                         <div>
                             <h4 class="font-semibold text-text-secondary mb-1">Explanation</h4>
@@ -159,7 +159,7 @@ const HistoryUI = {
                     ` : `
                         <div>
                             <h4 class="font-semibold text-text-secondary mb-1">Submitted Code (${detail.language})</h4>
-                            <pre class="bg-canvas p-3 rounded-lg border border-border-subtle font-mono text-2xs text-blue-0 whitespace-pre-wrap overflow-x-auto">${this.escapeHtml(detail.user_code)}</pre>
+                            <pre class="bg-canvas p-3 rounded-lg border border-border-subtle font-mono text-2xs text-text-primary whitespace-pre-wrap overflow-x-auto">${this.escapeHtml(detail.user_code)}</pre>
                         </div>
                         ${detail.analysis ? `
                             <div class="p-3 rounded-lg bg-void border border-border-subtle space-y-1">

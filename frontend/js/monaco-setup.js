@@ -111,9 +111,9 @@ const MonacoSetup = {
                 editorInstance = monaco.editor.create(container, {
                     value: code,
                     language: MONACO_LANG_MAP[activeLang] || 'python',
-                    theme: 'verdict-dark',
+                    theme: 'vs',
                     fontSize: 13,
-                    fontFamily: "'JetBrains Mono', 'Fira Code', 'Consolas', monospace",
+                    fontFamily: "monospace",
                     fontLigatures: true,
                     minimap: { enabled: true, scale: 1 },
                     scrollBeyondLastLine: false,

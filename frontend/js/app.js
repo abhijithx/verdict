@@ -208,8 +208,7 @@ const App = {
     },
 
     switchBottomTab(name) {
-        // Handle both old `.btm-tab` and new `.eval-btm-tab` selectors
-        document.querySelectorAll('.btm-tab, .eval-btm-tab').forEach(t => t.classList.toggle('active', t.dataset.panel === name));
+        document.querySelectorAll('.btm-tab').forEach(t => t.classList.toggle('active', t.dataset.panel === name));
         document.querySelectorAll('.btm-content').forEach(p => {
             p.classList.toggle('active', p.id === `panel-${name}`);
             p.classList.toggle('hidden', p.id !== `panel-${name}`);
