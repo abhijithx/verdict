@@ -113,7 +113,7 @@ const MonacoSetup = {
                     language: MONACO_LANG_MAP[activeLang] || 'python',
                     theme: 'vs',
                     fontSize: 13,
-                    fontFamily: "monospace",
+                    fontFamily: "'JetBrains Mono', monospace",
                     fontLigatures: true,
                     minimap: { enabled: true, scale: 1 },
                     scrollBeyondLastLine: false,

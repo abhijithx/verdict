@@ -135,10 +135,10 @@ const HistoryUI = {
                 <div class="space-y-4 text-xs">
                     <div class="flex items-center justify-between border-b border-border-subtle pb-3">
                         <div>
-                            <span class="px-2 py-0.5 rounded text-2xs font-semibold bg-accent-ghost text-accent uppercase">${detail.module}</span>
+                            <span class="px-2 py-0.5 rounded text-2xs font-semibold bg-accent/10 text-accent uppercase">${detail.module}</span>
                             <h3 class="text-sm font-bold text-text-primary mt-1">${this.escapeHtml(detail.problem || detail.problem_title)}</h3>
                         </div>
-                        <button id="btn-export-detail-json" class="px-3 py-1.5 rounded-lg text-2xs bg-accent text-void font-medium hover:brightness-110 transition-all">Export JSON</button>
+                        <button id="btn-export-detail-json" class="px-3 py-1.5 rounded-lg text-2xs bg-accent text-white font-medium hover:brightness-110 transition-all">Export JSON</button>
                     </div>
 
                     ${detail.module === 'recommendation' ? `
