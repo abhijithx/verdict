@@ -1,62 +1,78 @@
 /**
  * monaco-setup.js — Monaco Editor initialization and management.
  *
- * Loads Monaco Editor from CDN via the AMD loader (no React/build step needed).
+ * Loads Monaco Editor from CDN via AMD loader.
  * Handles:
- *   - Editor creation and mounting into the container div
- *   - Language switching (Python / C++ / Java)
- *   - Gutter markers for compile/runtime errors (red line decorations)
- *   - Language-specific boilerplate templates
- *   - Theme configuration (VS Code dark)
+ *   - Editor creation and mounting
+ *   - Language switching (Python / C++ / Java / JavaScript)
+ *   - Gutter markers for errors
+ *   - Language templates
+ *   - VS Code Dark & LeetCode Dark Theme
  */
 
-// Reference to the Monaco editor instance (set after initialization)
 let editorInstance = null;
-// Current decorations (for clearing on re-submit)
 let currentDecorations = [];
 
-// Language-specific boilerplate code templates
 const BOILERPLATES = {
-    python: `# Read input and write output
-# Example: n = int(input())
+    python: `# Write your solution here
+def solve():
+    # Read input and solve
+    pass
 
+if __name__ == '__main__':
+    solve()
 `,
     cpp: `#include <iostream>
+#include <vector>
+#include <string>
+#include <algorithm>
 using namespace std;
 
 int main() {
-    // Read input and write output
-    // Example: int n; cin >> n;
+    ios_base::sync_with_stdio(false);
+    cin.tie(NULL);
+    
+    // Write your solution here
     
     return 0;
 }
 `,
-    java: `import java.util.Scanner;
+    java: `import java.util.*;
+import java.io.*;
 
-public class Main {
+public class Solution {
     public static void main(String[] args) {
         Scanner sc = new Scanner(System.in);
-        // Read input and write output
-        // Example: int n = sc.nextInt();
+        // Write your solution here
         
     }
 }
 `,
+    javascript: `const fs = require('fs');
+
+function solve() {
+    const input = fs.readFileSync(0, 'utf-8').trim();
+    // Write your solution here
+}
+
+solve();
+`,
 };
 
-// Map our language names to Monaco language IDs
 const MONACO_LANG_MAP = {
     python: 'python',
+    py: 'python',
     cpp: 'cpp',
+    'c++': 'cpp',
     java: 'java',
+    javascript: 'javascript',
+    js: 'javascript',
+    node: 'javascript',
 };
 
 const MonacoSetup = {
     _currentLanguage: 'python',
 
-    /**
-     * Initialize Monaco Editor from CDN.
-     */
     init(containerId = 'editor-container', language = 'python', initialCode = null) {
         if (editorInstance || window.monacoEditor) {
             return Promise.resolve(window.monacoEditor || editorInstance);
@@ -85,37 +101,39 @@ const MonacoSetup = {
                 const activeLang = MonacoSetup._currentLanguage || language;
                 const code = initialCode || BOILERPLATES[activeLang] || '';
 
-                monaco.editor.defineTheme('verdict-dark', {
+                monaco.editor.defineTheme('leetcode-dark', {
                     base: 'vs-dark',
                     inherit: true,
                     rules: [
-                        { token: '', background: '0d0e0c' },
-                        { token: 'comment', foreground: '52564a', fontStyle: 'italic' },
-                        { token: 'keyword', foreground: '5ddc7a', fontStyle: 'bold' },
-                        { token: 'string', foreground: 'e8e6df' },
-                        { token: 'number', foreground: '5ddc7a' },
+                        { token: '', background: '1e1e1e' },
+                        { token: 'comment', foreground: '6a9955', fontStyle: 'italic' },
+                        { token: 'keyword', foreground: 'c586c0', fontStyle: 'bold' },
+                        { token: 'string', foreground: 'ce9178' },
+                        { token: 'number', foreground: 'b5cea8' },
+                        { token: 'type', foreground: '4ec9b0' },
+                        { token: 'function', foreground: 'dcdcaa' },
                     ],
                     colors: {
-                        'editor.background': '#0d0e0c',
-                        'editor.foreground': '#e8e6df',
-                        'editor.lineHighlightBackground': '#16180f',
-                        'editorCursor.foreground': '#5ddc7a',
-                        'editorWhitespace.foreground': '#2b2f22',
-                        'editorIndentGuide.background': '#1c1f16',
-                        'editorIndentGuide.activeBackground': '#2b2f22',
-                        'editorLineNumber.foreground': '#52564a',
-                        'editorLineNumber.activeForeground': '#e8e6df',
+                        'editor.background': '#1e1e1e',
+                        'editor.foreground': '#d4d4d4',
+                        'editor.lineHighlightBackground': '#282828',
+                        'editorCursor.foreground': '#2cbb5d',
+                        'editorWhitespace.foreground': '#333333',
+                        'editorIndentGuide.background': '#333333',
+                        'editorIndentGuide.activeBackground': '#555555',
+                        'editorLineNumber.foreground': '#6e7681',
+                        'editorLineNumber.activeForeground': '#cccccc',
                     }
                 });
 
                 editorInstance = monaco.editor.create(container, {
                     value: code,
                     language: MONACO_LANG_MAP[activeLang] || 'python',
-                    theme: 'vs',
-                    fontSize: 13,
-                    fontFamily: "'JetBrains Mono', monospace",
+                    theme: 'leetcode-dark',
+                    fontSize: 13.5,
+                    fontFamily: "'JetBrains Mono', Consolas, 'Courier New', monospace",
                     fontLigatures: true,
-                    minimap: { enabled: true, scale: 1 },
+                    minimap: { enabled: false },
                     scrollBeyondLastLine: false,
                     automaticLayout: true,
                     lineNumbers: 'on',
@@ -126,7 +144,7 @@ const MonacoSetup = {
                     cursorBlinking: 'smooth',
                     cursorSmoothCaretAnimation: 'on',
                     smoothScrolling: true,
-                    padding: { top: 8 },
+                    padding: { top: 12, bottom: 12 },
                     suggest: {
                         showKeywords: true,
                         showSnippets: true,
@@ -134,14 +152,27 @@ const MonacoSetup = {
                     bracketPairColorization: { enabled: true },
                 });
 
-                // Add Ctrl+Enter / Cmd+Enter shortcut to run/submit
+                // Ctrl+Enter / Cmd+Enter shortcut to Run
                 editorInstance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, function () {
                     if (typeof SessionView !== 'undefined' && SessionView.dryRun) {
                         SessionView.dryRun();
                     }
                 });
 
-                // Attach ResizeObserver for seamless responsive layout
+                // Ctrl+Shift+Enter / Cmd+Shift+Enter shortcut to Submit
+                editorInstance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.Enter, function () {
+                    if (typeof SessionView !== 'undefined' && SessionView.submit) {
+                        SessionView.submit();
+                    }
+                });
+
+                // Invalidate verification when user types in editor
+                editorInstance.onDidChangeModelContent(function () {
+                    if (typeof SessionView !== 'undefined' && SessionView.onCodeChange) {
+                        SessionView.onCodeChange();
+                    }
+                });
+
                 if (window.ResizeObserver && container) {
                     const ro = new ResizeObserver(() => {
                         editorInstance.layout();
@@ -178,28 +209,49 @@ const MonacoSetup = {
         const activeLang = this._currentLanguage || 'python';
         this.setCode(BOILERPLATES[activeLang] || '');
         if (typeof Toast !== 'undefined') {
-            Toast.info(`Reset code to ${activeLang.toUpperCase()} boilerplate template.`);
+            Toast.info(`Reset code to ${activeLang.toUpperCase()} starter template.`);
         }
     },
 
     formatCode() {
         const ed = this.getEditor();
         if (ed) {
-            ed.getAction('editor.action.formatDocument')?.run();
+            const action = ed.getAction('editor.action.formatDocument');
+            if (action) action.run();
             if (typeof Toast !== 'undefined') {
-                Toast.info('Formatted document.');
+                Toast.info('Formatted code.');
             }
         }
     },
 
+    copyCode() {
+        const code = this.getCode();
+        if (!code) {
+            if (typeof Toast !== 'undefined') Toast.warning('No code to copy.');
+            return;
+        }
+        navigator.clipboard.writeText(code).then(() => {
+            if (typeof Toast !== 'undefined') Toast.success('Code copied to clipboard!');
+        }).catch(() => {
+            if (typeof Toast !== 'undefined') Toast.error('Could not copy to clipboard.');
+        });
+    },
+
     switchLanguage(language, resetCode = false) {
-        this._currentLanguage = language;
-        MonacoSetup._updateTabState(language, true);
+        const lang = (language || 'python').toLowerCase();
+        this._currentLanguage = lang;
+        this._updateTabState(lang, true);
+
+        // Sync dropdown selector if present
+        const langSelect = document.getElementById('lang-select');
+        if (langSelect && langSelect.value !== lang) {
+            langSelect.value = lang;
+        }
 
         const ed = this.getEditor();
         if (!ed) return;
 
-        const monacoLang = MONACO_LANG_MAP[language] || 'python';
+        const monacoLang = MONACO_LANG_MAP[lang] || 'python';
         const model = ed.getModel();
 
         if (model) {
@@ -207,11 +259,14 @@ const MonacoSetup = {
         }
 
         if (resetCode) {
-            ed.setValue(BOILERPLATES[language] || '');
+            ed.setValue(BOILERPLATES[lang] || '');
         }
 
-        MonacoSetup.clearMarkers();
-        console.log('[MONACO] Switched to language:', language);
+        this.clearMarkers();
+        if (typeof SessionView !== 'undefined' && SessionView.onLanguageChange) {
+            SessionView.onLanguageChange(lang);
+        }
+        console.log('[MONACO] Switched to language:', lang);
     },
 
     setGutterMarker(line, message, severity = 'error') {
@@ -249,7 +304,7 @@ const MonacoSetup = {
 
         const model = ed.getModel();
         if (model) {
-            monaco.editor.setModelMarkers(model, 'codescore', [
+            monaco.editor.setModelMarkers(model, 'verdict', [
                 {
                     startLineNumber: line,
                     startColumn: 1,
@@ -262,83 +317,30 @@ const MonacoSetup = {
                 },
             ]);
         }
-
-        ed.revealLineInCenter(line);
     },
 
     clearMarkers() {
         const ed = this.getEditor();
-        if (!ed) return;
-
-        currentDecorations = ed.deltaDecorations(currentDecorations, []);
-        const model = ed.getModel();
-        if (model) {
-            monaco.editor.setModelMarkers(model, 'codescore', []);
+        if (ed) {
+            currentDecorations = ed.deltaDecorations(currentDecorations, []);
+            const model = ed.getModel();
+            if (model) {
+                monaco.editor.setModelMarkers(model, 'verdict', []);
+            }
         }
     },
 
-    /**
-     * Update the active state of the language tab buttons.
-     * @param {string} activeLanguage - The currently active language
-     * @private
-     */
-    _updateTabState(activeLanguage, showOnlyActive = true) {
-        // Remove 'active' class from all tabs, hide non-active if showOnlyActive is true
-        document.querySelectorAll('.ed-tab').forEach(tab => {
-            const isActive = tab.dataset.lang === activeLanguage;
-            tab.classList.toggle('active', isActive);
-            if (showOnlyActive) {
-                tab.style.display = isActive ? '' : 'none';
+    _updateTabState(language, isVisible) {
+        document.querySelectorAll('.ed-tab').forEach((tab) => {
+            const isMatch = tab.dataset.lang === language;
+            tab.classList.toggle('active', isMatch);
+            if (isVisible) {
+                tab.style.display = isMatch ? 'inline-flex' : 'none';
             }
         });
     },
 
-    /**
-     * Show only the tab for the given language, hiding the rest.
-     * Called when a session is loaded to avoid showing irrelevant language tabs.
-     * @param {string} language - The session's language
-     */
     showOnlyTab(language) {
         this._updateTabState(language, true);
     },
-
-    /**
-     * Restore all language tabs to visible.
-     * Called when no session is active or when the user needs to switch.
-     */
-    showAllTabs() {
-        document.querySelectorAll('.ed-tab').forEach(tab => {
-            tab.style.display = '';
-        });
-    },
 };
-
-// Register custom CSS for error line decorations
-const decorationStyles = document.createElement('style');
-decorationStyles.textContent = `
-    .errorLineDecoration {
-        background: rgba(224, 86, 63, 0.15) !important;
-        border-left: 3px solid #e0563f !important;
-    }
-    .errorGlyphMargin {
-        background: #e0563f;
-        border-radius: 50%;
-        width: 8px !important;
-        height: 8px !important;
-        margin-left: 4px;
-        margin-top: 6px;
-    }
-    .warningLineDecoration {
-        background: rgba(217, 164, 65, 0.15) !important;
-        border-left: 3px solid #d9a441 !important;
-    }
-    .warningGlyphMargin {
-        background: #d9a441;
-        border-radius: 50%;
-        width: 8px !important;
-        height: 8px !important;
-        margin-left: 4px;
-        margin-top: 6px;
-    }
-`;
-document.head.appendChild(decorationStyles);

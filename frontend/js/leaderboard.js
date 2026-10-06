@@ -60,6 +60,8 @@ const Leaderboard = {
 
     async exportPdf() {
         if (!this._currentProblemId) return;
+        const btn = document.getElementById('btn-export-leaderboard');
+        if (typeof App !== 'undefined') App.setBusy(btn, true, 'Exporting…');
         try {
             if (typeof Toast !== 'undefined') Toast.info('Generating leaderboard PDF...');
             const blob = await ApiClient.exportLeaderboardPdf(this._currentProblemId);
@@ -67,6 +69,8 @@ const Leaderboard = {
             if (typeof Toast !== 'undefined') Toast.success('Leaderboard PDF downloaded.');
         } catch (e) {
             if (typeof Toast !== 'undefined') Toast.error(`Export failed: ${e.message}`);
+        } finally {
+            if (typeof App !== 'undefined') App.setBusy(btn, false);
         }
     },
 

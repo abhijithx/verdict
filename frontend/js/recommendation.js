@@ -49,11 +49,17 @@ const RecommendationUI = {
     },
 
     async analyze() {
-        const problem = document.getElementById('rec-problem')?.value.trim();
-        const constraints = document.getElementById('rec-constraints')?.value.trim();
-        const sampleInput = document.getElementById('rec-sample-input')?.value.trim();
-        const sampleOutput = document.getElementById('rec-sample-output')?.value.trim();
-        const language = document.getElementById('rec-language')?.value || null;
+        const pEl = document.getElementById('rec-problem');
+        const cEl = document.getElementById('rec-constraints');
+        const siEl = document.getElementById('rec-sample-input');
+        const soEl = document.getElementById('rec-sample-output');
+        const lEl = document.getElementById('rec-language');
+
+        const problem = (pEl && pEl.value ? pEl.value.trim() : '');
+        const constraints = (cEl && cEl.value ? cEl.value.trim() : '');
+        const sampleInput = (siEl && siEl.value ? siEl.value.trim() : '');
+        const sampleOutput = (soEl && soEl.value ? soEl.value.trim() : '');
+        const language = (lEl && lEl.value ? lEl.value : null);
 
         if (!problem) {
             if (typeof Toast !== 'undefined') {
@@ -139,7 +145,8 @@ const RecommendationUI = {
         const report = document.getElementById('rec-report');
         if (!report) return;
 
-        const userSelectedLang = document.getElementById('rec-language')?.value || null;
+        const langEl = document.getElementById('rec-language');
+        const userSelectedLang = (langEl && langEl.value ? langEl.value : null);
         const isAiSelected = !userSelectedLang;
         const badgeHtml = isAiSelected
             ? `<span class="inline-block ml-1 px-1.5 py-0.5 text-[10px] font-mono font-semibold text-accent border border-accent/20 uppercase tracking-wider">[MIN TIME]</span>`
@@ -208,6 +215,34 @@ const RecommendationUI = {
                 Toast.success('Reference code copied to clipboard!');
             }
             setTimeout(() => btn.innerHTML = originalText, 2000);
+        }
+    },
+
+    async evaluateInIde() {
+        if (!this.currentResult) return;
+        const pEl = document.getElementById('rec-problem');
+        const problemDesc = (pEl && pEl.value) ? pEl.value.trim() : 'Recommended Problem';
+        const title = this.currentResult.recommended_algorithm ? `${this.currentResult.recommended_algorithm} Implementation` : 'Recommended Solution';
+        const lang = (this.currentResult.recommended_language || 'python').toLowerCase();
+        const code = this.currentResult.optimized_code || '';
+
+        try {
+            if (typeof Toast !== 'undefined') Toast.info('Creating session from recommendation...');
+            const problemRes = await ApiClient.createProblem(title, problemDesc, 'medium');
+            const sessionRes = await ApiClient.createSession({
+                problem_id: problemRes.problem_id,
+                language: lang,
+                submission_label: 'Recommendation Implementation',
+                code: code,
+            });
+            if (typeof App !== 'undefined') {
+                App.switchView('evaluation');
+                await App.openSession(sessionRes.session_id);
+            }
+            if (typeof Toast !== 'undefined') Toast.success('Loaded recommendation into evaluation IDE!');
+        } catch (err) {
+            console.error('[RecommendationUI] evaluateInIde error:', err);
+            if (typeof Toast !== 'undefined') Toast.error(`Could not launch evaluation: ${err.message}`);
         }
     },
 

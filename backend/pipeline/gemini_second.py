@@ -22,19 +22,32 @@ logger = get_logger("GeminiSecond")
 
 
 def _format_test_results_for_ai(test_cases, exec_results) -> list:
-    """Format test cases and execution results for AI prompt."""
+    """Format test cases and execution results for AI prompt with safe payload bounding."""
     exec_map = {er.test_id: er for er in exec_results}
     combined = []
     for tc in test_cases:
         er = exec_map.get(tc.test_id)
+        stdin_str = tc.stdin or ""
+        if len(stdin_str) > 400:
+            stdin_str = stdin_str[:400] + "... [truncated]"
+        act_str = (er.actual_stdout if er else "") or ""
+        if len(act_str) > 400:
+            act_str = act_str[:400] + "... [truncated]"
+        exp_str = tc.expected_stdout or ""
+        if len(exp_str) > 400:
+            exp_str = exp_str[:400] + "... [truncated]"
+        err_str = (er.stderr if er else "") or ""
+        if len(err_str) > 400:
+            err_str = err_str[:400] + "... [truncated]"
+
         combined.append({
             "test_id": tc.test_case_id or str(tc.test_id),
             "description": tc.description or "",
-            "stdin": tc.stdin,
-            "expected_stdout": tc.expected_stdout,
-            "actual_stdout": er.actual_stdout if er else "",
+            "stdin": stdin_str,
+            "expected_stdout": exp_str,
+            "actual_stdout": act_str,
             "passed": er.passed if er else False,
-            "stderr": er.stderr if er else "",
+            "stderr": err_str,
             "time_ms": er.time_ms if er else 0,
         })
     return combined

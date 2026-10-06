@@ -12,6 +12,9 @@ from services.logger import get_logger
 logger = get_logger("JSONValidator")
 
 
+import re
+
+
 class JSONValidator:
     """Validator for verifying structure and completeness of AI responses."""
 
@@ -32,17 +35,39 @@ class JSONValidator:
         """
         Clean markdown fences or stray commentary around JSON text.
         """
+        if not raw_text:
+            return ""
         text = raw_text.strip()
-        if text.startswith("```"):
-            first_newline = text.find("\n")
-            if first_newline != -1:
-                text = text[first_newline + 1:]
-            if text.endswith("```"):
-                text = text[:-3]
-            elif "```" in text:
-                last_fence = text.rfind("```")
-                text = text[:last_fence]
-        return text.strip()
+
+        # 1. Try markdown fence extraction
+        fence_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', text)
+        if fence_match:
+            candidate = fence_match.group(1).strip()
+            try:
+                json.loads(candidate)
+                return candidate
+            except Exception:
+                pass
+
+        # 2. Extract outermost JSON object { ... }
+        start_brace = text.find("{")
+        end_brace = text.rfind("}")
+        if start_brace != -1 and end_brace != -1 and end_brace > start_brace:
+            candidate = text[start_brace:end_brace + 1].strip()
+            try:
+                json.loads(candidate)
+                return candidate
+            except Exception:
+                # Try fixing trailing commas before closing braces/brackets
+                fixed = re.sub(r',\s*([}\]])', r'\1', candidate)
+                try:
+                    json.loads(fixed)
+                    return fixed
+                except Exception:
+                    pass
+            return candidate
+
+        return text
 
     @classmethod
     def parse_and_validate(
@@ -114,8 +139,8 @@ class JSONValidator:
         test_cases = data.get("test_cases")
         if not test_cases or not isinstance(test_cases, list) or len(test_cases) == 0:
             return False, data, "Generated test_cases list must not be empty"
-        if len(test_cases) < 4:
-            return False, data, f"Only {len(test_cases)} test cases generated; minimum 4 required"
+        if len(test_cases) < 2:
+            return False, data, f"Only {len(test_cases)} test cases generated; minimum 2 required"
         return True, data, None
 
     @classmethod

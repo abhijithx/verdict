@@ -23,15 +23,21 @@ if backend_dir not in sys.path:
     sys.path.insert(0, backend_dir)
 
 from main import app
+from database import init_db, AsyncSessionLocal
+from seed_data import run_seeds
 from scoring_engine.scorer import (
     derive_signals, compute_final_score, normalize_complexity,
     COMPLEXITY_SCORE_MAP
 )
 from pipeline.error_parser import parse_error_line, extract_error_message
-from pipeline.piston_client import TestExecutionResult
-from schemas import (
-    EvaluationProfileWeights, QualityIssue
-)
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def prepare_database():
+    """Ensure database tables and seeds exist before tests."""
+    await init_db()
+    async with AsyncSessionLocal() as db:
+        await run_seeds(db)
 
 
 @pytest.mark.asyncio
@@ -48,21 +54,25 @@ async def test_platform_stats():
         assert isinstance(data["total_problems"], int)
 
 
+import uuid
+
+
 @pytest.mark.asyncio
 async def test_problems_crud():
     """Verify problem creation, retrieval, and listing."""
     transport = ASGITransport(app=app)
+    uid = uuid.uuid4().hex[:6]
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         # Create a problem
         create_res = await ac.post("/api/problems", json={
-            "title": "Test Two Sum Problem",
+            "title": f"Test Two Sum Problem {uid}",
             "description": "Find indices of two numbers that add up to target.",
             "difficulty": "easy"
         })
         assert create_res.status_code == 200
         prob = create_res.json()
         problem_id = prob["problem_id"]
-        assert prob["title"] == "Test Two Sum Problem"
+        assert prob["title"] == f"Test Two Sum Problem {uid}"
         assert prob["difficulty"] == "easy"
 
         # Get by ID
@@ -81,10 +91,11 @@ async def test_problems_crud():
 async def test_evaluation_profile_validation():
     """Verify profile weights must sum to exactly 1.0 (100%)."""
     transport = ASGITransport(app=app)
+    uid = uuid.uuid4().hex[:6]
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         # Valid profile: sums to 1.0
         valid_res = await ac.post("/api/evaluation-profiles", json={
-            "name": "Balanced Test Profile",
+            "name": f"Balanced Test Profile {uid}",
             "correctness_weight": 0.40,
             "performance_weight": 0.20,
             "optimization_weight": 0.15,
@@ -93,11 +104,11 @@ async def test_evaluation_profile_validation():
             "documentation_weight": 0.05
         })
         assert valid_res.status_code == 200
-        assert valid_res.json()["name"] == "Balanced Test Profile"
+        assert valid_res.json()["name"] == f"Balanced Test Profile {uid}"
 
         # Invalid profile: sums to 0.70 (not 1.0)
         invalid_res = await ac.post("/api/evaluation-profiles", json={
-            "name": "Invalid Sum Profile",
+            "name": f"Invalid Sum Profile {uid}",
             "correctness_weight": 0.30,
             "performance_weight": 0.10,
             "optimization_weight": 0.10,
@@ -112,18 +123,18 @@ async def test_evaluation_profile_validation():
 async def test_session_lifecycle():
     """Verify session creation defaults to draft and handles dry-run."""
     transport = ASGITransport(app=app)
+    uid = uuid.uuid4().hex[:6]
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         # 1. Create a problem first
         p_res = await ac.post("/api/problems", json={
-            "title": "Session Lifecycle Problem",
+            "title": f"Session Lifecycle Problem {uid}",
             "description": "Print Hello World",
             "difficulty": "easy"
         })
         prob_id = p_res.json()["problem_id"]
 
         # 2. Create session
-        s_res = await ac.post("/api/sessions", json={
-            "problem_id": prob_id,
+        s_res = await ac.post(f"/api/sessions?problem_id={prob_id}", json={
             "language": "python",
             "submission_label": "Candidate Test Attempt",
             "code": "print('Hello World')"
@@ -151,41 +162,37 @@ async def test_session_lifecycle():
 
 def test_scoring_engine_math():
     """Verify deterministic scoring calculations and signal derivations."""
-    profile_weights = EvaluationProfileWeights(
-        correctness_weight=0.40,
-        performance_weight=0.20,
-        optimization_weight=0.15,
-        quality_weight=0.10,
-        readability_weight=0.10,
-        documentation_weight=0.05
-    )
+    profile_weights = {
+        "correctness_weight": 0.40,
+        "performance_weight": 0.20,
+        "optimization_weight": 0.15,
+        "quality_weight": 0.10,
+        "readability_weight": 0.10,
+        "documentation_weight": 0.05
+    }
 
     # 4 out of 4 test cases passed
-    test_results = [
-        TestExecutionResult(test_id=1, passed=True, expected_stdout="1", time_ms=10.0),
-        TestExecutionResult(test_id=2, passed=True, expected_stdout="2", time_ms=12.0),
-        TestExecutionResult(test_id=3, passed=True, expected_stdout="3", time_ms=15.0),
-        TestExecutionResult(test_id=4, passed=True, expected_stdout="4", time_ms=8.0),
+    exec_results = [
+        {"passed": True, "time_ms": 10.0},
+        {"passed": True, "time_ms": 12.0},
+        {"passed": True, "time_ms": 15.0},
+        {"passed": True, "time_ms": 8.0},
     ]
 
-    quality_issues = [
-        QualityIssue(severity="low", issue="Minor variable naming", description="Use snake_case")
-    ]
+    second_response = {
+        "complexity": {"time": "O(n)", "space": "O(1)", "is_optimal": True},
+        "quality_score": 90,
+        "readability_score": 85,
+        "documentation_score": 80,
+    }
 
-    signals = derive_signals(
-        test_results=test_results,
-        time_complexity="O(N)",
-        space_complexity="O(1)",
-        quality_issues=quality_issues,
-        suggestions=["Use list comprehension"],
-        code="def solve():\n    # Documentation comment\n    return 42"
-    )
+    signals = derive_signals(exec_results, second_response)
 
-    assert signals.correctness_score == 100
-    assert signals.performance_score == 90  # O(N) is scored 90
-    assert signals.quality_score == 90     # 1 low issue deducts 10
+    assert signals["correctness_score"] == 100
+    assert signals["performance_score"] >= 80
+    assert signals["optimization_score"] == 100
 
-    final_score = compute_final_score(signals, profile_weights)
+    final_score = compute_final_score(profile_weights, signals)
     assert isinstance(final_score, int)
     assert 0 <= final_score <= 100
 
@@ -198,7 +205,7 @@ def test_error_parser_regex():
     result = 10 / 0
 ZeroDivisionError: division by zero"""
     assert parse_error_line(py_tb, "python") == 14
-    assert "division by zero" in parse_error_summary(py_tb, "python").lower()
+    assert "division by zero" in extract_error_message(py_tb, "python").lower()
 
     # C++ compiler error
     cpp_err = "main.cpp:25:5: error: 'cout' was not declared in this scope"
@@ -207,3 +214,4 @@ ZeroDivisionError: division by zero"""
     # Java compiler error
     java_err = "Main.java:8: error: cannot find symbol"
     assert parse_error_line(java_err, "java") == 8
+

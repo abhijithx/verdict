@@ -5,9 +5,22 @@
 const HistoryUI = {
     currentTab: 'recommendation',
     items: [],
+    _searchTimer: null,
+    _searchBound: false,
 
     async init() {
+        // Live-search: debounce typing so we don't hammer the API
+        const searchInput = document.getElementById('hist-search');
+        if (searchInput && !this._searchBound) {
+            searchInput.addEventListener('input', () => this.debouncedLoad());
+            this._searchBound = true;
+        }
         await this.load();
+    },
+
+    debouncedLoad() {
+        clearTimeout(this._searchTimer);
+        this._searchTimer = setTimeout(() => this.load(), 350);
     },
 
     async setTab(tab) {
@@ -16,18 +29,19 @@ const HistoryUI = {
         const evalTab = document.getElementById('hist-tab-eval');
 
         if (tab === 'recommendation') {
-            recTab?.classList.add('active-tab');
-            evalTab?.classList.remove('active-tab');
+            if (recTab) recTab.classList.add('active-tab');
+            if (evalTab) evalTab.classList.remove('active-tab');
         } else {
-            evalTab?.classList.add('active-tab');
-            recTab?.classList.remove('active-tab');
+            if (evalTab) evalTab.classList.add('active-tab');
+            if (recTab) recTab.classList.remove('active-tab');
         }
 
         await this.load();
     },
 
     async load() {
-        const searchQuery = document.getElementById('hist-search')?.value.trim() || '';
+        const searchEl = document.getElementById('hist-search');
+        const searchQuery = (searchEl && searchEl.value ? searchEl.value.trim() : '') || '';
         const listContainer = document.getElementById('hist-list');
         if (!listContainer) return;
 
@@ -45,8 +59,13 @@ const HistoryUI = {
         } catch (err) {
             console.error('[HistoryUI] Error loading history:', err);
             listContainer.innerHTML = `
-                <div class="py-12 text-center text-danger text-xs">
-                    Failed to load history items: ${err.message}
+                <div class="empty-state col-span-full">
+                    <div class="empty-state-icon" style="border-color: var(--danger-dim);">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                    </div>
+                    <div class="empty-state-title">Couldn't load history</div>
+                    <div class="empty-state-desc">${this.escapeHtml(err.message)}</div>
+                    <button class="cmd-btn cmd-secondary text-xs mt-4" onclick="HistoryUI.load()">Try again</button>
                 </div>
             `;
         }
@@ -58,10 +77,12 @@ const HistoryUI = {
 
         if (this.items.length === 0) {
             listContainer.innerHTML = `
-                <div class="py-16 text-center text-text-dim">
-                    <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="mx-auto mb-3 opacity-50"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                    <p class="text-sm font-medium text-text-tertiary mb-1">No ${this.currentTab} history found</p>
-                    <p class="text-2xs">Try adjusting your search terms or create a new ${this.currentTab} session.</p>
+                <div class="empty-state col-span-full">
+                    <div class="empty-state-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-text-tertiary"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    </div>
+                    <div class="empty-state-title">No ${this.currentTab} history found</div>
+                    <div class="empty-state-desc">Try adjusting your search terms, or run a new ${this.currentTab} session.</div>
                 </div>
             `;
             return;
@@ -76,7 +97,7 @@ const HistoryUI = {
                                 <span class="text-2xs font-semibold text-accent">[ ${this.escapeHtml(item.category || 'REC')} ]</span>
                                 <span class="text-2xs text-text-dim">${this.formatDate(item.timestamp)}</span>
                             </div>
-                            <h4 class="text-xs font-bold text-text-primary mb-2">${this.escapeHtml(item.title)}</h4>
+                            <h4 class="text-[13px] font-semibold text-text-primary mb-2">${this.escapeHtml(item.title)}</h4>
                             <div class="flex items-center gap-2 text-2xs text-text-tertiary">
                                 <span>Alg: ${this.escapeHtml(item.algorithm || 'N/A')}</span>
                                 <span>•</span>
@@ -103,7 +124,7 @@ const HistoryUI = {
                                 <span class="verdict ${vc} text-2xs">${vl}</span>
                                 <span class="text-2xs text-text-dim">${this.formatDate(item.timestamp)}</span>
                             </div>
-                            <h4 class="text-xs font-bold text-text-primary mb-1">${this.escapeHtml(item.title)}</h4>
+                            <h4 class="text-[13px] font-semibold text-text-primary mb-1">${this.escapeHtml(item.title)}</h4>
                             <p class="text-2xs text-text-tertiary mb-2 font-sans">${this.escapeHtml(item.submission_label || 'Attempt')}</p>
                             <div class="flex items-center gap-2 text-2xs">
                                 <span class="text-text-tertiary">[${this.escapeHtml((item.language || '').substring(0,3).toUpperCase())}]</span>
@@ -126,6 +147,7 @@ const HistoryUI = {
 
     async viewDetails(itemId) {
         try {
+            if (typeof App !== 'undefined') App._rememberFocus();
             const detail = await ApiClient.getHistoryItem(itemId);
             const modal = document.getElementById('hist-detail-modal');
             const content = document.getElementById('hist-detail-content');
@@ -177,6 +199,7 @@ const HistoryUI = {
             }
 
             modal.classList.remove('hidden');
+            if (typeof App !== 'undefined') App._focusModal('hist-detail-modal');
         } catch (err) {
             if (typeof Toast !== 'undefined') {
                 Toast.error(`Failed to load details: ${err.message}`);
@@ -186,10 +209,12 @@ const HistoryUI = {
 
     closeModal() {
         const modal = document.getElementById('hist-detail-modal');
-        modal?.classList.add('hidden');
+        if (modal) modal.classList.add('hidden');
+        if (typeof App !== 'undefined') App._restoreFocus();
     },
 
     async deleteItem(itemId) {
+        if (!window.confirm('Delete this history entry? This cannot be undone.')) return;
         try {
             await ApiClient.deleteHistoryItem(itemId);
             if (typeof Toast !== 'undefined') {
@@ -206,17 +231,32 @@ const HistoryUI = {
         }
     },
 
+    _downloadBlob(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    },
+
     exportDetailJson(data) {
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-        downloadBlob(blob, `verdict_history_${data.id}_${Date.now()}.json`);
+        this._downloadBlob(blob, `verdict_history_${data.id}_${Date.now()}.json`);
         if (typeof Toast !== 'undefined') {
             Toast.success('Record JSON exported.');
         }
     },
 
     exportAllJson() {
+        if (!this.items || this.items.length === 0) {
+            if (typeof Toast !== 'undefined') Toast.warning('Nothing to export yet.');
+            return;
+        }
         const blob = new Blob([JSON.stringify(this.items, null, 2)], { type: 'application/json' });
-        downloadBlob(blob, `verdict_history_export_${Date.now()}.json`);
+        this._downloadBlob(blob, `verdict_history_export_${Date.now()}.json`);
         if (typeof Toast !== 'undefined') {
             Toast.success('All history records exported.');
         }
@@ -227,7 +267,7 @@ const HistoryUI = {
         try {
             const d = new Date(isoStr);
             return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-        } catch {
+        } catch (err) {
             return isoStr;
         }
     },

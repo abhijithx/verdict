@@ -288,8 +288,9 @@ async def export_leaderboard_pdf(problem_id: int, db: AsyncSession = Depends(get
     styles = getSampleStyleSheet()
     elements = []
 
+    import html
     # Title
-    elements.append(Paragraph(f"Leaderboard: {leaderboard.problem_title}", styles['Title']))
+    elements.append(Paragraph(f"Leaderboard: {html.escape(leaderboard.problem_title or '')}", styles['Title']))
     elements.append(Spacer(1, 20))
     elements.append(Paragraph(
         f"Total Submissions: {leaderboard.total_submissions}",

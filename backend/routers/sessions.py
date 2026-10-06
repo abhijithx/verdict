@@ -25,7 +25,7 @@ from schemas import (
     SessionCreate, SessionSubmit, SessionResponse,
     DryRunResultResponse, TestResultDetail, AnalysisResultResponse,
     FailingCaseDetail, QualityIssue, ProblemResponse,
-    EvaluationProfileResponse
+    EvaluationProfileResponse, RunTestsResponse
 )
 from pipeline.orchestrator import run_pipeline
 
@@ -127,15 +127,105 @@ async def dry_run_session(
         )
 
     session.code = submission.code
+    if submission.language:
+        session.language = submission.language.lower()
 
-    from pipeline.piston_client import piston_client
+    from pipeline.code_runner import code_runner
     from pipeline.error_parser import parse_error_line
 
-    dry_run_output = await piston_client.dry_run(submission.code, session.language)
-    passed = dry_run_output.passed
-    stdout = dry_run_output.stdout
-    stderr = dry_run_output.stderr
-    error_line = dry_run_output.error_line or (parse_error_line(stderr, session.language) if stderr else None)
+    # 1. If user provided multiple test cases, execute all of them in batch
+    if submission.test_cases and len(submission.test_cases) > 0:
+        test_case_objs = []
+        for idx, tc in enumerate(submission.test_cases):
+            tc_id = tc.test_id or (idx + 1)
+            test_case_objs.append(type('TC', (), {
+                'test_id': tc_id,
+                'test_case_id': tc.test_case_id or f"Case {idx + 1}",
+                'description': tc.description or f"User Case {idx + 1}",
+                'stdin': tc.stdin or "",
+                'expected_stdout': tc.expected_stdout or "",
+                'is_edge_case': tc.is_edge_case
+            })())
+
+        exec_results = await code_runner.run_all_tests(
+            code=submission.code,
+            language=session.language,
+            test_cases=test_case_objs,
+            timeout_ms=5000
+        )
+
+        test_result_details = []
+        all_passed = True
+        total_time = 0.0
+        first_err_line = None
+        combined_stderr = []
+        stdout_parts = []
+
+        for tc_obj, er in zip(test_case_objs, exec_results):
+            if not er.passed:
+                all_passed = False
+            total_time += (er.time_ms or 0.0)
+            if er.stderr:
+                combined_stderr.append(er.stderr)
+                if not first_err_line:
+                    first_err_line = parse_error_line(er.stderr, session.language)
+            if er.actual_stdout:
+                stdout_parts.append(er.actual_stdout)
+
+            test_result_details.append(TestResultDetail(
+                test_case_id=tc_obj.test_case_id,
+                description=tc_obj.description,
+                stdin=tc_obj.stdin,
+                expected_stdout=tc_obj.expected_stdout,
+                actual_stdout=er.actual_stdout,
+                passed=er.passed,
+                is_edge_case=tc_obj.is_edge_case,
+                time_ms=er.time_ms,
+                stderr=er.stderr
+            ))
+
+        passed = all_passed
+        time_ms = total_time
+        stderr = "\n".join(combined_stderr) if combined_stderr else None
+        stdout = "\n".join(stdout_parts) if stdout_parts else None
+        error_line = first_err_line
+
+    # 2. Single stdin run
+    elif submission.stdin is not None and submission.stdin != "":
+        exec_res = await code_runner.execute(
+            submission.code,
+            session.language,
+            stdin=submission.stdin,
+            timeout_seconds=5.0
+        )
+        rc = exec_res.get("run", {}).get("code", 0)
+        stdout = exec_res.get("stdout", "")
+        stderr = exec_res.get("stderr", "")
+        time_ms = exec_res.get("time_ms", 0.0)
+        passed = (rc == 0)
+        error_line = parse_error_line(stderr, session.language) if (stderr and rc != 0) else None
+        test_result_details = [
+            TestResultDetail(
+                test_case_id="Case 1",
+                description="Custom Input Run",
+                stdin=submission.stdin,
+                expected_stdout="",
+                actual_stdout=stdout,
+                passed=passed,
+                is_edge_case=False,
+                time_ms=time_ms,
+                stderr=stderr
+            )
+        ]
+    # 3. Empty stdin pre-flight check
+    else:
+        dry_run_output = await code_runner.dry_run(submission.code, session.language)
+        passed = dry_run_output.passed
+        stdout = dry_run_output.stdout
+        stderr = dry_run_output.stderr
+        time_ms = 0.0
+        error_line = dry_run_output.error_line or (parse_error_line(stderr, session.language) if (stderr and not passed) else None)
+        test_result_details = None
 
     dry_run_record = DryRunResult(
         session_id=session_id,
@@ -150,7 +240,107 @@ async def dry_run_session(
     await db.commit()
     await db.refresh(dry_run_record)
 
-    return dry_run_record
+    return DryRunResultResponse(
+        dry_run_id=dry_run_record.dry_run_id,
+        passed=dry_run_record.passed,
+        stdout=dry_run_record.stdout,
+        stderr=dry_run_record.stderr,
+        error_line=dry_run_record.error_line,
+        time_ms=time_ms,
+        test_results=test_result_details,
+        created_at=dry_run_record.created_at
+    )
+
+
+@router.post("/{session_id}/run-tests", response_model=RunTestsResponse)
+async def run_session_tests(
+    session_id: int,
+    submission: SessionSubmit,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Execute user-provided test cases against the session's code in batch.
+    Returns structured pass/fail results for each test case.
+    """
+    result = await db.execute(
+        select(Session).where(Session.session_id == session_id)
+    )
+    session = result.scalars().first()
+    if not session:
+        raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+
+    session.code = submission.code
+    if submission.language:
+        session.language = submission.language.lower()
+    from pipeline.code_runner import code_runner
+    from pipeline.error_parser import parse_error_line
+
+    raw_cases = submission.test_cases or []
+    if not raw_cases:
+        if submission.stdin is not None:
+            raw_cases = [type('UserTestCaseInput', (), {'test_id': 1, 'test_case_id': 'Case 1', 'description': 'Custom Input', 'stdin': submission.stdin, 'expected_stdout': '', 'is_edge_case': False})()]
+        else:
+            raw_cases = [type('UserTestCaseInput', (), {'test_id': 1, 'test_case_id': 'Case 1', 'description': 'Default Input', 'stdin': '', 'expected_stdout': '', 'is_edge_case': False})()]
+
+    test_case_objs = [
+        type('TC', (), {
+            'test_id': getattr(tc, 'test_id', None) or (idx + 1),
+            'test_case_id': getattr(tc, 'test_case_id', None) or f"Case {idx + 1}",
+            'description': getattr(tc, 'description', None) or f"Case {idx + 1}",
+            'stdin': getattr(tc, 'stdin', "") or "",
+            'expected_stdout': getattr(tc, 'expected_stdout', "") or "",
+            'is_edge_case': getattr(tc, 'is_edge_case', False)
+        })()
+        for idx, tc in enumerate(raw_cases)
+    ]
+
+    exec_results = await code_runner.run_all_tests(
+        code=submission.code,
+        language=session.language,
+        test_cases=test_case_objs,
+        timeout_ms=5000
+    )
+
+    test_result_details = []
+    passed_count = 0
+    total_time = 0.0
+    first_err_line = None
+    all_stderr = []
+
+    for tc_obj, er in zip(test_case_objs, exec_results):
+        if er.passed:
+            passed_count += 1
+        total_time += (er.time_ms or 0.0)
+        if er.stderr:
+            all_stderr.append(er.stderr)
+            if not first_err_line:
+                first_err_line = parse_error_line(er.stderr, session.language)
+
+        test_result_details.append(TestResultDetail(
+            test_case_id=tc_obj.test_case_id,
+            description=tc_obj.description,
+            stdin=tc_obj.stdin,
+            expected_stdout=tc_obj.expected_stdout,
+            actual_stdout=er.actual_stdout,
+            passed=er.passed,
+            is_edge_case=tc_obj.is_edge_case,
+            time_ms=er.time_ms,
+            stderr=er.stderr
+        ))
+
+    total = len(test_case_objs)
+    all_passed = (passed_count == total)
+
+    return RunTestsResponse(
+        passed=all_passed,
+        total=total,
+        passed_count=passed_count,
+        failed_count=total - passed_count,
+        results=test_result_details,
+        time_ms=total_time,
+        error_line=first_err_line,
+        stderr="\n".join(all_stderr) if all_stderr else None
+    )
 
 
 from services.rate_limiter import check_ai_rate_limit
@@ -239,8 +429,23 @@ async def submit_session(
     await db.execute(delete(GeneratedTestCase).where(GeneratedTestCase.session_id == session_id))
     await db.execute(delete(DryRunResult).where(DryRunResult.session_id == session_id))
 
+    # Persist user-provided test cases if supplied
+    if submission.test_cases and len(submission.test_cases) > 0:
+        for idx, tc in enumerate(submission.test_cases):
+            db_tc = GeneratedTestCase(
+                session_id=session_id,
+                test_case_id=tc.test_case_id or f"Case {idx + 1}",
+                description=tc.description or f"User Case {idx + 1}",
+                stdin=tc.stdin if tc.stdin is not None else "",
+                expected_stdout=tc.expected_stdout if tc.expected_stdout is not None else "",
+                is_edge_case=tc.is_edge_case,
+            )
+            db.add(db_tc)
+
     # Update the session with new code and reset status
     session.code = submission.code
+    if submission.language:
+        session.language = submission.language.lower()
     session.status = "pending"
     await db.commit()
 
@@ -442,6 +647,19 @@ async def list_sessions(
     ]
 
 
+@router.delete("/{session_id}", response_model=dict)
+async def delete_session(session_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Delete a session and all its associated data (dry-run, test cases, execution results, analysis).
+    """
+    from services.history_service import history_service
+    success = await history_service.delete_history_item(db, f"eval_{session_id}")
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+    return {"message": f"Session {session_id} successfully deleted", "session_id": session_id}
+
+
+
 def _get_boilerplate(language: str) -> str:
     """
     Return language-specific boilerplate code for new sessions.
@@ -450,8 +668,9 @@ def _get_boilerplate(language: str) -> str:
     for each supported language.
     """
     boilerplates = {
-        "python": '# Read input and write output\n# Example: n = int(input())\n\n',
+        "python": '# Read input and write output\n# Example: import sys; lines = sys.stdin.read().split()\n\n',
         "cpp": '#include <iostream>\nusing namespace std;\n\nint main() {\n    // Read input and write output\n    // Example: int n; cin >> n;\n    \n    return 0;\n}\n',
         "java": 'import java.util.Scanner;\n\npublic class Main {\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        // Read input and write output\n        // Example: int n = sc.nextInt();\n        \n    }\n}\n',
+        "javascript": '// Read input and write output\nconst fs = require("fs");\nconst input = fs.readFileSync(0, "utf-8").trim();\n\n',
     }
     return boilerplates.get(language, "")

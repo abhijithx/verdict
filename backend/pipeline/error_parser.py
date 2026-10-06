@@ -39,11 +39,22 @@ ERROR_LINE_PATTERNS = {
     ],
     "java": [
         # javac error format: Main.java:8: error: ';' expected
-        r'Main\.java:(\d+):\s+error',
-        # Warning format: Main.java:8: warning: message
-        r'Main\.java:(\d+):\s+warning',
+        r'(?:Main|[A-Za-z0-9_]+)\.java:(\d+):\s+(?:error|warning)',
         # Generic format
         r'[^:]+\.java:(\d+)',
+    ],
+    "javascript": [
+        # V8 stack trace: at Object.<anonymous> (/path/to/main.js:5:1)
+        r'main\.js:(\d+)',
+        r'[^:]+\.js:(\d+)',
+    ],
+    "js": [
+        r'main\.js:(\d+)',
+        r'[^:]+\.js:(\d+)',
+    ],
+    "node": [
+        r'main\.js:(\d+)',
+        r'[^:]+\.js:(\d+)',
     ],
 }
 

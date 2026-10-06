@@ -7,7 +7,9 @@ const NewSessionModal = {
     _problemId: 'new',
 
     async open() {
+        if (typeof App !== 'undefined') App._rememberFocus();
         document.getElementById('new-session-modal').classList.remove('hidden');
+        if (typeof App !== 'undefined') App._focusModal('new-session-modal');
 
         try {
             const problems = await ApiClient.getProblems();
@@ -47,7 +49,10 @@ const NewSessionModal = {
         this.selectLanguage('python');
     },
 
-    close() { document.getElementById('new-session-modal').classList.add('hidden'); },
+    close() {
+        document.getElementById('new-session-modal').classList.add('hidden');
+        if (typeof App !== 'undefined') App._restoreFocus();
+    },
 
     selectLanguage(lang) {
         this._lang = lang;
@@ -103,6 +108,8 @@ const NewSessionModal = {
         }
         profileId = parseInt(profileId, 10) || null;
 
+        const createBtn = document.getElementById('btn-create-session');
+        if (typeof App !== 'undefined') App.setBusy(createBtn, true, 'Creating…');
         try {
             const result = await ApiClient.createSession(parseInt(problemId, 10), this._lang, label, profileId);
             this.close();
@@ -111,6 +118,8 @@ const NewSessionModal = {
             await App.refreshSidebar();
         } catch (e) {
             if (typeof Toast !== 'undefined') Toast.error(`Failed to create session: ${e.message}`);
+        } finally {
+            if (typeof App !== 'undefined') App.setBusy(createBtn, false);
         }
     },
 };

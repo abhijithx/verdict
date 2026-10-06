@@ -39,7 +39,7 @@ async def lifespan(app: FastAPI):
       - Seeds default evaluation profiles and sample problems
     
     Shutdown:
-      - Closes the Piston HTTP client connection pool
+      - Cleanup resources
     """
     # === STARTUP ===
     print("[STARTUP] Initializing database...")
@@ -50,16 +50,14 @@ async def lifespan(app: FastAPI):
         await run_seeds(db)
     
     print("[STARTUP] OK - Verdict AI Platform ready!")
+    print("[STARTUP] Native Code Execution Engine: Active (Python 3, C++ 17, Java 17, JS)")
     print("[STARTUP] Frontend: http://localhost:8000")
     print("[STARTUP] API Docs: http://localhost:8000/docs")
     
     yield  # Application runs here
     
     # === SHUTDOWN ===
-    print("[SHUTDOWN] Closing Piston client...")
-    from pipeline.piston_client import piston_client
-    await piston_client.close()
-    print("[SHUTDOWN] OK - Cleanup complete")
+    print("[SHUTDOWN] Cleanup complete")
 
 
 # Create the FastAPI application
@@ -179,16 +177,21 @@ async def export_session_pdf(session_id: int, db: AsyncSession = Depends(get_db)
         fontName='Courier'
     )
 
+    import html
+
+    def _safe_text(t: str) -> str:
+        return html.escape(str(t or "")).replace("\n", "<br/>")
+
     # Title
-    elements.append(Paragraph("CodeScore AI — Session Report", styles['Title']))
+    elements.append(Paragraph("Verdict AI — Session Report", styles['Title']))
     elements.append(Spacer(1, 10))
 
     # Session info
-    elements.append(Paragraph(f"<b>Submission:</b> {session.submission_label}", styles['Normal']))
-    elements.append(Paragraph(f"<b>Language:</b> {session.language}", styles['Normal']))
-    elements.append(Paragraph(f"<b>Problem:</b> {problem.title if problem else 'N/A'}", styles['Normal']))
+    elements.append(Paragraph(f"<b>Submission:</b> {_safe_text(session.submission_label)}", styles['Normal']))
+    elements.append(Paragraph(f"<b>Language:</b> {_safe_text(session.language)}", styles['Normal']))
+    elements.append(Paragraph(f"<b>Problem:</b> {_safe_text(problem.title if problem else 'N/A')}", styles['Normal']))
     if analysis:
-        elements.append(Paragraph(f"<b>Verdict:</b> {analysis.verdict}", styles['Normal']))
+        elements.append(Paragraph(f"<b>Verdict:</b> {_safe_text(analysis.verdict)}", styles['Normal']))
         elements.append(Paragraph(f"<b>Final Score:</b> {analysis.final_score}/100", styles['Normal']))
     elements.append(Spacer(1, 15))
 
@@ -245,20 +248,20 @@ async def export_session_pdf(session_id: int, db: AsyncSession = Depends(get_db)
     if analysis:
         elements.append(Paragraph("Complexity Analysis", styles['Heading2']))
         elements.append(Paragraph(
-            f"<b>Time:</b> {analysis.time_complexity or 'N/A'} | "
-            f"<b>Space:</b> {analysis.space_complexity or 'N/A'} | "
+            f"<b>Time:</b> {_safe_text(analysis.time_complexity or 'N/A')} | "
+            f"<b>Space:</b> {_safe_text(analysis.space_complexity or 'N/A')} | "
             f"<b>Optimal:</b> {'Yes' if analysis.is_optimal else 'No'}",
             styles['Normal']
         ))
         if analysis.correctness_summary:
             elements.append(Spacer(1, 5))
-            elements.append(Paragraph(analysis.correctness_summary, styles['Normal']))
+            elements.append(Paragraph(_safe_text(analysis.correctness_summary), styles['Normal']))
         elements.append(Spacer(1, 15))
 
     # Code explanation
     if analysis and analysis.code_explanation:
         elements.append(Paragraph("Code Walkthrough", styles['Heading2']))
-        elements.append(Paragraph(analysis.code_explanation, styles['Normal']))
+        elements.append(Paragraph(_safe_text(analysis.code_explanation), styles['Normal']))
 
     doc.build(elements)
     buffer.seek(0)

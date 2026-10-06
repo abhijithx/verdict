@@ -80,6 +80,12 @@ class TestAsyncAPIs(unittest.TestCase):
         async def _run():
             from httpx import AsyncClient, ASGITransport
             from main import app
+            from database import init_db, AsyncSessionLocal
+            from seed_data import run_seeds
+
+            await init_db()
+            async with AsyncSessionLocal() as db:
+                await run_seeds(db)
 
             transport = ASGITransport(app=app)
             async with AsyncClient(transport=transport, base_url="http://test") as ac:

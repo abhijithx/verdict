@@ -55,7 +55,8 @@ const EvaluationProfileUI = {
     },
 
     async save() {
-        const name = (document.getElementById('custom-profile-name')?.value || '').trim();
+        const nameEl = document.getElementById('custom-profile-name');
+        const name = (nameEl && nameEl.value ? nameEl.value : '').trim();
         if (!name) {
             if (typeof Toast !== 'undefined') Toast.warning('Please enter a profile name.');
             return;
@@ -80,7 +81,8 @@ const EvaluationProfileUI = {
                 if (co) sel.insertBefore(o, co); else sel.appendChild(o);
                 sel.value = profile.profile_id;
             }
-            document.getElementById('custom-profile-panel')?.classList.add('hidden');
+            const panel = document.getElementById('custom-profile-panel');
+            if (panel) panel.classList.add('hidden');
             if (typeof Toast !== 'undefined') Toast.success(`Profile "${name}" created and selected.`);
         } catch (e) {
             if (typeof Toast !== 'undefined') Toast.error(`Failed to save profile: ${e.message}`);

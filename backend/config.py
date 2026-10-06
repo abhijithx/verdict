@@ -29,8 +29,8 @@ class Settings:
     GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
     GROQ_MODEL: str = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
     
-    # Piston Execution API Configuration
-    PISTON_URL: str = os.getenv("PISTON_URL", "https://emkc.org/api/v2/piston/execute")
+    # Execution Engine Configuration (Pure local sandbox)
+    EXECUTION_ENGINE: str = "local"
     
     # Database Configuration
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./codescore.db")

@@ -96,6 +96,13 @@ const ApiClient = {
         return this._fetch(`/sessions/${sessionId}`);
     },
 
+    /** Delete a session and its associated data */
+    async deleteSession(sessionId) {
+        return this._fetch(`/sessions/${sessionId}`, {
+            method: 'DELETE',
+        });
+    },
+
     /**
      * Create a new session for a problem.
      * @param {number} problemId - Problem ID
@@ -104,8 +111,20 @@ const ApiClient = {
      * @param {number|null} profileId - Evaluation profile ID
      * @param {string} code - Initial code (optional)
      */
-    async createSession(problemId, language, submissionLabel, profileId = null, code = '') {
-        return this._fetch(`/sessions?problem_id=${problemId}`, {
+    async createSession(problemIdOrPayload, language, submissionLabel, profileId = null, code = '') {
+        if (typeof problemIdOrPayload === 'object' && problemIdOrPayload !== null) {
+            const p = problemIdOrPayload;
+            return this._fetch(`/sessions?problem_id=${p.problem_id}`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    language: p.language || 'python',
+                    submission_label: p.submission_label || 'Draft',
+                    profile_id: p.profile_id || null,
+                    code: p.code || '',
+                }),
+            });
+        }
+        return this._fetch(`/sessions?problem_id=${problemIdOrPayload}`, {
             method: 'POST',
             body: JSON.stringify({
                 language,
@@ -117,26 +136,45 @@ const ApiClient = {
     },
 
     /**
-     * Run compile/runtime dry-run check via Piston.
+     * Run compile/runtime dry-run or user test cases check via native local runner.
      * @param {number} sessionId - Session ID
      * @param {string} code - Source code to check
+     * @param {string} [stdin=""] - Optional stdin input to execute against
+     * @param {Array} [testCases=null] - Optional user-configured test cases to execute
+     * @param {string} [language=null] - Optional language override
      */
-    async dryRunSession(sessionId, code) {
+    async dryRunSession(sessionId, code, stdin = "", testCases = null, language = null) {
         return this._fetch(`/sessions/${sessionId}/dry-run`, {
             method: 'POST',
-            body: JSON.stringify({ code }),
+            body: JSON.stringify({ code, stdin, test_cases: testCases, language }),
         });
     },
 
     /**
-     * Submit code for evaluation — triggers the full pipeline.
+     * Execute user-configured test cases against the session's code in batch.
+     * @param {number} sessionId - Session ID
+     * @param {string} code - Source code to test
+     * @param {Array} testCases - Array of test cases [{stdin, expected_stdout}]
+     * @param {string} [language=null] - Optional language override
+     */
+    async runTests(sessionId, code, testCases = [], language = null) {
+        return this._fetch(`/sessions/${sessionId}/run-tests`, {
+            method: 'POST',
+            body: JSON.stringify({ code, test_cases: testCases, language }),
+        });
+    },
+
+    /**
+     * Submit code for evaluation — triggers the full pipeline with user test cases.
      * @param {number} sessionId - Session ID
      * @param {string} code - Source code to evaluate
+     * @param {Array} [testCases=null] - Optional user-configured test cases to include in evaluation
+     * @param {string} [language=null] - Optional language override
      */
-    async submitSession(sessionId, code) {
+    async submitSession(sessionId, code, testCases = null, language = null) {
         return this._fetch(`/sessions/${sessionId}/submit`, {
             method: 'POST',
-            body: JSON.stringify({ code }),
+            body: JSON.stringify({ code, test_cases: testCases, language }),
         });
     },
 
@@ -228,6 +266,21 @@ const ApiClient = {
     /** Get aggregated platform statistics */
     async getPlatformStats() {
         return this._fetch('/problems/stats');
+    },
+
+    /** Get URL for session PDF export */
+    getSessionPdfUrl(sessionId) {
+        return `${API_BASE}/sessions/${sessionId}/export`;
+    },
+
+    /** Export a session report as PDF */
+    async exportSessionPdf(sessionId) {
+        return this._fetch(`/sessions/${sessionId}/export`);
+    },
+
+    /** Export a problem leaderboard as PDF */
+    async exportLeaderboardPdf(problemId) {
+        return this._fetch(`/problems/${problemId}/export`);
     },
 };
 

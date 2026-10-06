@@ -15,34 +15,33 @@
             theme: {
                 extend: {
                     colors: {
-                        'void':        '#f8f9fa',
-                        'canvas':      '#f8f9fa',
-                        'surface':     '#ffffff',
-                        'raised':      '#f1f3f5',
-                        'overlay':     '#e2e6ea',
-                        'hover':       '#e9ecef',
-                        'border-subtle': 'rgba(0, 0, 0, 0.06)',
-                        'border-soft':   'rgba(0, 0, 0, 0.12)',
-                        'border-medium': 'rgba(0, 0, 0, 0.18)',
-                        'text-primary':   '#111827',
-                        'text-secondary': '#4b5563',
-                        'text-tertiary':  '#6b7280',
-                        'text-dim':       '#9ca3af',
-                        'accent':         '#4f46e5',
-                        'accent-bright':  '#4338ca',
-                        'accent-dim':     '#6366f1',
-                        'success':        '#16a34a',
-                        'warning':        '#d97706',
-                        'danger':         '#dc2626',
-                        'green-0':        '#16a34a',
-                        'green-1':        '#15803d',
-                        'red-0':          '#dc2626',
-                        'amber-0':        '#d97706',
-                        'blue-0':         '#2563eb',
+                        'void':          'var(--bg-base)',
+                        'canvas':        'var(--bg-base)',
+                        'surface':       'var(--bg-surface-1)',
+                        'raised':        'var(--bg-surface-2)',
+                        'overlay':       'var(--bg-overlay)',
+                        'hover':         'var(--bg-hover)',
+                        'border-subtle': 'var(--border-subtle)',
+                        'border-soft':   'var(--border-soft)',
+                        'border-medium': 'var(--border-medium)',
+                        'text-primary':   'var(--text-primary)',
+                        'text-secondary': 'var(--text-secondary)',
+                        'text-tertiary':  'var(--text-tertiary)',
+                        'text-dim':       'var(--text-dim)',
+                        'accent':         'var(--accent-1)',
+                        'accent-bright':  'var(--accent-2)',
+                        'accent-dim':     'var(--accent-dim)',
+                        'success':        'var(--status-pass)',
+                        'warning':        'var(--status-warn)',
+                        'danger':         'var(--status-fail)',
+                        'green-0':        '#2cbb5d',
+                        'green-1':        '#22c55e',
+                        'red-0':          '#f43f5e',
+                        'amber-0':        '#f59e0b',
+                        'blue-0':         '#38bdf8',
                     },
                     fontFamily: {
-                        'display': ['"Playfair Display"', 'Georgia', 'serif'],
-                        'sans': ['Inter', '-apple-system', 'sans-serif'],
+                        'sans': ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
                         'mono': ['"JetBrains Mono"', 'monospace'],
                     },
                 }
@@ -51,21 +50,35 @@
     </script>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <link rel="stylesheet" href="/styles.css?v=6">
+    <link rel="stylesheet" href="/styles.css?v=7">
 </head>
 <body class="bg-void text-text-primary font-sans h-screen flex flex-col overflow-hidden">
 
+    <a href="#app-viewport" class="skip-link">Skip to content</a>
+
     <!-- ======== NAVIGATION ======== -->
     <header id="top-bar" class="topbar">
-        <div class="flex items-center gap-6">
-            <a href="#home" onclick="App.switchView('home')" class="flex items-center gap-3 group">
-                <div class="logo-mark">V</div>
-                <span class="logo-text">Verdict</span>
+        <div class="flex items-center gap-4">
+            <a href="#home" onclick="App.switchView('home')" class="flex items-center gap-2.5 group" aria-label="Verdict home">
+                <div class="logo-mark" aria-hidden="true">V</div>
+                <span class="logo-text hidden sm:inline">Verdict</span>
             </a>
 
-            <div class="hidden md:block w-px h-5 bg-border-soft"></div>
+            <div class="hidden md:block w-px h-5 bg-border-soft" aria-hidden="true"></div>
 
-            <nav class="hidden md:flex items-center gap-1">
+            <!-- LeetCode Problem Quick Navigator -->
+            <div class="lc-nav-pill">
+                <button class="lc-nav-btn" onclick="App.openProblemList()" title="Browse Problem Catalog">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="mr-1.5"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                    Problem List
+                </button>
+                <div class="w-px h-3.5 bg-white/10 mx-1"></div>
+                <button class="lc-nav-btn lc-nav-arrow" onclick="App.prevProblem()" title="Previous problem">‹</button>
+                <button class="lc-nav-btn lc-nav-arrow" onclick="App.nextProblem()" title="Next problem">›</button>
+                <button class="lc-nav-btn lc-nav-arrow" onclick="App.randomProblem()" title="Random problem">🔀</button>
+            </div>
+
+            <nav id="main-nav" class="hidden xl:flex items-center gap-1" aria-label="Primary">
                 <a href="#home" data-view="home" onclick="App.switchView('home')" class="nav-link active-nav">Home</a>
                 <a href="#recommendation" data-view="recommendation" onclick="App.switchView('recommendation')" class="nav-link">Recommend</a>
                 <a href="#evaluation" data-view="evaluation" onclick="App.switchView('evaluation')" class="nav-link">Evaluate</a>
@@ -74,20 +87,52 @@
             </nav>
         </div>
 
+        <!-- Center: Run / Submit Buttons -->
+        <div class="lc-top-center">
+            <button id="top-btn-run" class="lc-run-btn" onclick="SessionView.dryRun()">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+                <span>Run</span>
+            </button>
+            <button id="top-btn-submit" class="lc-submit-btn" onclick="SessionView.submit()">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                <span>Submit</span>
+            </button>
+        </div>
+
         <div class="flex items-center gap-3">
-            <div id="pipeline-status" class="hidden items-center gap-2">
+            <div id="pipeline-status" class="hidden items-center gap-2" role="status" aria-live="polite">
                 <div class="status-dot"></div>
                 <span id="pipeline-status-text">Processing</span>
             </div>
-          
-            <button id="btn-leaderboard" class="topbar-btn" onclick="App.showLeaderboard()" title="Leaderboard">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="12" width="5" height="8" rx="2"/><rect x="10" y="4" width="5" height="16" rx="2"/><rect x="17" y="8" width="5" height="12" rx="2"/></svg>
+
+            <!-- Timer Pill -->
+            <div class="timer-pill hidden sm:inline-flex" onclick="App.toggleTimer()" title="Click to pause/resume timer">
+                <span id="timer-icon">⏸</span>
+                <span id="session-timer-text">00:00</span>
+                <button onclick="event.stopPropagation(); App.resetTimer();" title="Reset timer" class="timer-reset">⟳</button>
+            </div>
+
+            <button id="btn-leaderboard" class="topbar-btn" onclick="App.showLeaderboard()" title="Leaderboard" aria-label="Open leaderboard">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="12" width="5" height="8" rx="2"/><rect x="10" y="4" width="5" height="16" rx="2"/><rect x="17" y="8" width="5" height="12" rx="2"/></svg>
+            </button>
+
+            <button id="btn-mobile-menu" class="topbar-btn md:hidden" onclick="App.toggleMobileNav()" aria-label="Open navigation menu" aria-expanded="false" aria-controls="mobile-nav">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
             </button>
         </div>
     </header>
 
+    <!-- Mobile navigation drawer -->
+    <nav id="mobile-nav" class="mobile-nav hidden" aria-label="Primary navigation (mobile)">
+        <a href="#home" data-view="home" onclick="App.switchView('home')" class="nav-link">Home</a>
+        <a href="#recommendation" data-view="recommendation" onclick="App.switchView('recommendation')" class="nav-link">Recommend</a>
+        <a href="#evaluation" data-view="evaluation" onclick="App.switchView('evaluation')" class="nav-link">Evaluate</a>
+        <a href="#history" data-view="history" onclick="App.switchView('history')" class="nav-link">History</a>
+        <a href="#about" data-view="about" onclick="App.switchView('about')" class="nav-link">About</a>
+    </nav>
+
     <!-- ======== MAIN VIEWPORT ======== -->
-    <div id="app-viewport" class="flex-1 relative overflow-hidden">
+    <div id="app-viewport" class="flex-1 relative overflow-hidden" tabindex="-1">
 
         <!-- ====================================================================
              1. HOME VIEW
@@ -95,13 +140,13 @@
         <section id="view-home" class="h-full overflow-y-auto thin-scroll">
             <!-- Hero -->
             <div class="hero-section">
-                <div class="px-8 md:px-12 relative">
+                <div class="px-5 sm:px-8 md:px-12 relative">
                     <div class="animate-fade-up">
                         <div class="hero-eyebrow">Two-Stage Code Judge</div>
                         <h1 class="hero-title max-w-5xl">
                             Recommend an approach.
                         </h1>
-                        <h2 class="text-[clamp(1.5rem,3vw,2.5rem)] font-display font-500 tracking-[-0.03em] mt-2">
+                        <h2 class="text-[clamp(1.5rem,3vw,2.5rem)] font-display font-medium tracking-[-0.03em] mt-2">
                             <span class="gradient-text">Verify the implementation.</span>
                         </h2>
                         <p class="hero-subtitle">
@@ -123,14 +168,14 @@
             </div>
 
             <!-- Pipeline Steps -->
-            <div class="px-8 md:px-12 pb-16">
+            <div class="px-5 sm:px-8 md:px-12 pb-16">
                 <div class="animate-fade-up animate-fade-up-delay-1">
                     <h2 class="text-xs font-mono text-text-tertiary uppercase tracking-[0.2em] mb-8">How the verdict is reached</h2>
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         <div class="feature-card">
                             <div class="feature-number">01</div>
                             <h3 class="feature-title">Dry Run</h3>
-                            <p class="feature-desc">Compile-check and basic runtime validation via Piston sandbox before any heavy lifting.</p>
+                            <p class="feature-desc">Instant compile-check and syntax validation via native local sandbox before running test suites.</p>
                         </div>
                         <div class="feature-card">
                             <div class="feature-number">02</div>
@@ -140,7 +185,7 @@
                         <div class="feature-card">
                             <div class="feature-number">03</div>
                             <h3 class="feature-title">Sandboxed Execution</h3>
-                            <p class="feature-desc">Code runs against all test cases in an isolated Piston runtime. No guessing, only results.</p>
+                            <p class="feature-desc">Code runs against all test cases in an isolated native execution runtime with microsecond metrics.</p>
                         </div>
                         <div class="feature-card">
                             <div class="feature-number">04</div>
@@ -152,7 +197,7 @@
             </div>
 
             <!-- Bento Feature Grid -->
-            <div class="px-8 md:px-12 pb-16">
+            <div class="px-5 sm:px-8 md:px-12 pb-16">
                 <div class="animate-fade-up animate-fade-up-delay-2">
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <!-- Large scoring card -->
@@ -185,8 +230,14 @@
                             <button onclick="App.switchView('recommendation')" class="cmd-btn cmd-ghost text-accent !px-0 !justify-start mt-6 text-sm">
                                 Explore
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Live Platform Metrics -->
-            <div class="px-8 md:px-12 pb-12">
+            <div class="px-5 sm:px-8 md:px-12 pb-12">
                 <div class="animate-fade-up">
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div class="panel p-5 border border-border-subtle">
@@ -215,7 +266,7 @@
              2. RECOMMENDATION VIEW — Two-column layout
              ==================================================================== -->
         <section id="view-recommendation" class="h-full overflow-y-auto thin-scroll hidden">
-            <div class="px-8 md:px-12 py-10">
+            <div class="px-5 sm:px-8 md:px-12 py-10">
                 <!-- Header -->
                 <div class="mb-8">
                     <div class="hero-eyebrow mb-3">Stage 1</div>
@@ -307,6 +358,10 @@
                                         <h3 id="rec-res-algorithm" class="text-[20px] font-display font-semibold text-text-primary mt-3 tracking-[-0.02em]">Optimal Approach</h3>
                                     </div>
                                     <div class="flex items-center gap-2">
+                                        <button onclick="RecommendationUI.evaluateInIde()" class="cmd-btn cmd-primary text-[13px]" title="Create session and open code in Evaluation IDE">
+                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                            Evaluate in IDE
+                                        </button>
                                         <button id="btn-copy-rec-code" onclick="RecommendationUI.copyCode()" class="cmd-btn cmd-ghost text-[13px]">
                                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                                             Copy
@@ -364,20 +419,21 @@
 
 
         <!-- ====================================================================
-             3. EVALUATION IDE VIEW
+             3. EVALUATION IDE VIEW (LeetCode Style)
              ==================================================================== -->
-        <section id="view-evaluation" class="h-full flex min-w-0 hidden">
-            <!-- Sidebar -->
-            <aside id="sidebar" class="w-[280px] bg-surface border-r border-border-subtle flex flex-col shrink-0">
-                <div class="p-4 border-b border-border-subtle">
-                    <button id="btn-new-session" class="w-full h-10 rounded-xl text-[13px] font-medium transition-all duration-200 flex items-center justify-center gap-2 bg-accent text-white hover:brightness-110 active:scale-[0.97]" onclick="NewSessionModal.open()">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <section id="view-evaluation" class="h-full flex flex-col lg:flex-row min-w-0 hidden">
+            <!-- Sidebar (Sessions Drawer) -->
+            <aside id="sidebar" class="app-sidebar w-[280px] bg-surface border-r border-border-subtle flex flex-col shrink-0">
+                <div class="p-3 border-b border-border-subtle">
+                    <button id="btn-new-session" class="w-full h-9 rounded-lg text-[13px] font-medium transition-all duration-200 flex items-center justify-center gap-2 bg-accent text-white hover:brightness-110 active:scale-[0.97]" onclick="NewSessionModal.open()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                         New Session
                     </button>
                 </div>
 
-                <div class="px-4 py-3 border-b border-border-subtle">
-                    <select id="sidebar-problem-filter" class="w-full bg-void border border-border-soft rounded-lg text-[13px] text-text-secondary py-2 px-3 focus:outline-none focus:border-accent/40 appearance-none cursor-pointer" onchange="App.filterSessions(this.value)">
+                <div class="px-3 py-2 border-b border-border-subtle">
+                    <label for="sidebar-problem-filter" class="sr-only">Filter sessions by problem</label>
+                    <select id="sidebar-problem-filter" class="w-full bg-void border border-border-soft rounded-lg text-[12px] text-text-secondary py-1.5 px-3 pr-8 focus:outline-none focus:border-accent/40 appearance-none cursor-pointer" onchange="App.filterSessions(this.value)">
                         <option value="all">All Problems</option>
                     </select>
                 </div>
@@ -393,85 +449,231 @@
                 </div>
             </aside>
 
-            <!-- Center: Editor -->
-            <main id="center-panel" class="flex-1 flex flex-col min-w-0">
-                <div id="editor-tabs" class="h-10 bg-raised border-b border-border-subtle flex items-center justify-between px-2">
-                    <div class="flex items-end gap-0 h-full">
-                        <button id="tab-python" class="ed-tab active" onclick="MonacoSetup.switchLanguage('python')" data-lang="python">
-                            <span class="ed-tab-dot bg-[#3572A5]"></span>main.py
-                        </button>
-                        <button id="tab-cpp" class="ed-tab" onclick="MonacoSetup.switchLanguage('cpp')" data-lang="cpp" style="display: none;">
-                            <span class="ed-tab-dot bg-[#f34b7d]"></span>main.cpp
-                        </button>
-                        <button id="tab-java" class="ed-tab" onclick="MonacoSetup.switchLanguage('java')" data-lang="java" style="display: none;">
-                            <span class="ed-tab-dot bg-[#b07219]"></span>Main.java
-                        </button>
-                    </div>
-                    <div class="flex items-center gap-1.5 py-1">
-                        <button onclick="MonacoSetup.formatCode()" class="px-2 py-1 text-[11px] font-mono rounded text-text-tertiary hover:text-text-primary hover:bg-surface border border-transparent hover:border-border-subtle" title="Format Code">
-                            Format
-                        </button>
-                        <button onclick="MonacoSetup.resetCode()" class="px-2 py-1 text-[11px] font-mono rounded text-text-tertiary hover:text-danger hover:bg-danger/10 border border-transparent hover:border-danger/20" title="Reset to template">
-                            Reset
+            <!-- ======================================================
+                 Left Pane: LeetCode Problem Panel (Description / Editorial / Submissions)
+                 ====================================================== -->
+            <div id="desc-panel" class="lc-desc">
+                <!-- Top Tabs -->
+                <div class="lc-tab-bar">
+                    <button class="lc-tab active" id="tab-lc-desc" onclick="SessionView.switchDescTab('desc')">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        Description
+                    </button>
+                    <button class="lc-tab" id="tab-lc-editorial" onclick="SessionView.switchDescTab('editorial')">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+                        Editorial
+                    </button>
+                    <button class="lc-tab" id="tab-lc-submissions" onclick="SessionView.switchDescTab('submissions')">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        Submissions <span id="submission-count-badge" class="lc-badge-count">0</span>
+                    </button>
+
+                    <div class="ml-auto flex items-center">
+                        <button id="btn-close-desc" class="lc-desc-close" onclick="App.closeDrawers()" aria-label="Close problem panel">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                         </button>
                     </div>
                 </div>
 
+                <!-- Tab 1: Description Pane -->
+                <div id="lc-desc-pane" class="flex-1 overflow-y-auto thin-scroll flex flex-col">
+                    <div class="p-5 pb-3">
+                        <h1 id="lc-problem-title" class="text-xl font-bold text-white tracking-tight">No problem selected</h1>
+                        
+                        <!-- Badges row -->
+                        <div id="lc-desc-chips" class="flex flex-wrap items-center gap-2 mt-3">
+                            <span id="lc-difficulty" class="lc-diff lc-diff-easy">Easy</span>
+                            <button class="lc-chip" onclick="SessionView.toggleTopics()"><span class="mr-1">🏷️</span> Topics ▾</button>
+                            <button class="lc-chip" onclick="SessionView.toggleCompanies()"><span class="mr-1">🏢</span> Companies ▾</button>
+                            <button class="lc-chip" onclick="SessionView.toggleHints()"><span class="mr-1">💡</span> Hint ▾</button>
+                        </div>
+                    </div>
+
+                    <!-- Expandable Hints Section -->
+                    <div id="lc-hints-container" class="px-5 py-2 hidden space-y-2">
+                        <div class="bg-[#282828] p-3 rounded-lg border border-white/5 text-xs text-[#d4d4d4]">
+                            <div class="font-bold text-white mb-1">💡 Hint 1</div>
+                            <p class="text-text-secondary">A brute force approach would search all possible pairs. Can you use extra space (like a Hash Table) to solve it in linear time?</p>
+                        </div>
+                    </div>
+
+                    <!-- Description Body -->
+                    <div id="problem-description" class="px-5 py-3 flex-1 text-[13.5px] leading-relaxed text-[#d4d4d4]">
+                        <p class="lc-desc-placeholder">Select or create a session to view the problem statement.</p>
+                    </div>
+                </div>
+
+                <!-- Tab 2: Editorial Pane -->
+                <div id="lc-editorial-pane" class="flex-1 overflow-y-auto thin-scroll hidden"></div>
+
+                <!-- Tab 3: Submissions History Pane -->
+                <div id="lc-submissions-pane" class="flex-1 overflow-y-auto thin-scroll hidden"></div>
+            </div>
+
+            <!-- Vertical Splitter between Problem Panel & Editor -->
+            <div id="desc-resizer" class="panel-resizer-v hidden lg:block" title="Drag to resize split, double-click to reset"></div>
+
+            <!-- ======================================================
+                 Right Pane: LeetCode Code Editor & Interactive Console
+                 ====================================================== -->
+            <main id="center-panel" class="flex-1 flex flex-col min-w-0 bg-[#1e1e1e]">
+                <!-- Code Header Bar -->
+                <div id="editor-tabs" class="h-10 bg-[#1e1e1e] border-b border-white/10 flex items-center justify-between px-3 gap-2">
+                    <div class="flex items-center gap-2">
+                        <button class="ed-panel-toggle lg:hidden" onclick="App.toggleSidebar()" aria-label="Toggle sessions">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/></svg>
+                            Sessions
+                        </button>
+                        <button class="ed-panel-toggle xl:hidden" onclick="App.toggleDescription()" aria-label="Toggle problem">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                            Problem
+                        </button>
+
+                        <div class="flex items-center gap-1.5 font-mono text-xs text-text-tertiary">
+                            <span class="text-[#2cbb5d] font-bold">&lt;/&gt;</span>
+                            <span class="text-white font-medium">Code</span>
+                        </div>
+
+                        <!-- Language Selector Dropdown -->
+                        <select id="lang-select" class="lc-lang-select" onchange="MonacoSetup.switchLanguage(this.value, false)">
+                            <option value="python">Python 3</option>
+                            <option value="cpp">C++ (17)</option>
+                            <option value="java">Java (17)</option>
+                            <option value="javascript">JavaScript</option>
+                        </select>
+                    </div>
+
+                    <!-- Right Action Icons -->
+                    <div class="flex items-center gap-1">
+                        <button onclick="MonacoSetup.formatCode()" class="lc-action-icon" title="Format Document (Prettier)">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="21" y1="10" x2="7" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="21" y1="18" x2="7" y2="18"/></svg>
+                        </button>
+                        <button onclick="MonacoSetup.resetCode()" class="lc-action-icon" title="Reset to Starter Template">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                        </button>
+                        <button onclick="MonacoSetup.copyCode()" class="lc-action-icon" title="Copy Code">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Monaco Editor Viewport -->
                 <div id="editor-container" class="flex-1 min-h-0"></div>
 
-                <div id="bottom-panel" class="h-64 min-h-[80px] bg-raised border-t border-border-subtle flex flex-col">
-                    <div class="h-9 border-b border-border-subtle flex items-center px-2 gap-0">
-                        <button class="btm-tab active" data-panel="problems" onclick="App.switchBottomTab('problems')">Problems</button>
-                        <button class="btm-tab" data-panel="output" onclick="App.switchBottomTab('output')">Output</button>
-                        <button class="btm-tab" data-panel="test-results" onclick="App.switchBottomTab('test-results')">Tests</button>
-                    </div>
-                    <div class="flex-1 overflow-y-auto thin-scroll p-4">
-                        <div id="panel-problems" class="btm-content active">
-                            <p class="text-text-secondary text-[13px]">No diagnostics. Write code and submit.</p>
-                        </div>
-                        <div id="panel-output" class="btm-content hidden">
-                            <pre id="output-content" class="text-text-secondary text-[13px] font-mono whitespace-pre-wrap leading-relaxed">No output.</pre>
-                        </div>
-                        <div id="panel-test-results" class="btm-content hidden">
-                            <p class="text-text-secondary text-[13px]">Submit code to generate and execute test cases.</p>
-                        </div>
-                    </div>
-                </div>
+                <!-- Horizontal Splitter for Console Drawer -->
+                <div id="console-resizer" class="panel-resizer-h" title="Drag to resize console, double-click to toggle"></div>
 
-                <div id="action-bar" class="h-12 bg-surface border-t border-border-subtle flex items-center justify-between px-4">
-                    <div class="flex items-center gap-2">
-                        <button id="btn-dry-run" class="cmd-btn cmd-ghost" onclick="SessionView.dryRun()">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
-                            Run
-                        </button>
-                        <button id="btn-submit" class="cmd-btn cmd-primary" onclick="SessionView.submit()">
-                            Submit Evaluation
-                        </button>
+                <!-- Bottom LeetCode Console Drawer -->
+                <div id="bottom-panel" class="h-72 min-h-[40px] bg-[#1e1e1e] border-t border-white/10 flex flex-col transition-all duration-200">
+                    <div class="h-10 border-b border-white/10 flex items-center justify-between px-3 shrink-0 bg-[#1e1e1e]">
+                        <div class="flex items-center gap-2">
+                            <button class="console-toggle-btn" onclick="SessionView.toggleConsole()">
+                                <span id="console-chevron">▾</span> Console
+                            </button>
+                            <button id="btn-console-maximize" class="console-toggle-btn !px-2 ml-0.5" onclick="SessionView.toggleExpandConsole()" title="Maximize / Restore Console">
+                                <span id="console-expand-icon">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+                                </span>
+                            </button>
+
+                            <div class="flex items-center gap-1 ml-2">
+                                <button class="btm-tab active" data-panel="testcase" onclick="SessionView.switchConsoleTab('testcase')" role="tab" aria-selected="true">
+                                    Testcase
+                                </button>
+                                <button class="btm-tab" data-panel="test-result" onclick="SessionView.switchConsoleTab('test-result')" role="tab" aria-selected="false">
+                                    Test Result
+                                </button>
+                                <button class="btm-tab" data-panel="analysis" onclick="SessionView.switchConsoleTab('analysis')" role="tab" aria-selected="false">
+                                    AI Verdict
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <button id="btn-export-pdf" class="lc-run-btn !h-7 !px-2.5 text-xs hidden" onclick="SessionView.exportPdf()" title="Export PDF Verdict Report">
+                                PDF Report
+                            </button>
+                            <button id="btn-console-run" class="lc-run-btn !h-7 !px-3 text-xs" onclick="SessionView.dryRun()" title="Run Code on Testcases (Ctrl+Enter)">
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+                                <span>Run</span>
+                            </button>
+                            <button id="btn-console-submit" class="lc-submit-btn !h-7 !px-3.5 text-xs" onclick="SessionView.submit()" title="Submit for Evaluation & Analysis">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                                <span>Submit</span>
+                            </button>
+                        </div>
                     </div>
-                    <div class="flex items-center gap-2">
-                        <button id="btn-export-pdf" class="cmd-btn cmd-ghost hidden" onclick="SessionView.exportPdf()">
-                            Export PDF
-                        </button>
+
+                    <!-- Console Stack Panes -->
+                    <div id="console-stack" class="flex-1 min-h-0 flex flex-col overflow-y-auto thin-scroll">
+                        <!-- Tab 1: Testcase Input -->
+                        <div id="panel-testcase" class="btm-content active p-4 space-y-3">
+                            <div class="flex items-center justify-between">
+                                <div id="lc-case-tabs-container" class="flex items-center gap-2">
+                                    <button class="lc-case-tab active" onclick="SessionView.selectTestCase(0)">Case 1</button>
+                                    <button class="lc-case-tab" onclick="SessionView.selectTestCase(1)">Case 2</button>
+                                    <button class="lc-case-tab" onclick="SessionView.selectTestCase(2)">Case 3</button>
+                                    <button class="lc-case-tab" onclick="SessionView.addCustomTestCase()">+</button>
+                                </div>
+                                <div class="text-2xs text-text-tertiary font-mono hidden sm:block">
+                                    Configure inputs & expected outputs
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div>
+                                    <label class="text-2xs font-mono text-text-tertiary block mb-1.5 uppercase tracking-wider">Standard Input (stdin)</label>
+                                    <textarea id="lc-case-stdin" class="w-full h-24 bg-[#282828] border border-white/10 rounded-lg p-3 text-xs font-mono text-[#9cdcfe] focus:outline-none focus:border-[#2cbb5d] resize-none" placeholder="Enter testcase stdin..."></textarea>
+                                </div>
+                                <div>
+                                    <label class="text-2xs font-mono text-text-tertiary block mb-1.5 uppercase tracking-wider">Expected Output (stdout)</label>
+                                    <textarea id="lc-case-stdout" class="w-full h-24 bg-[#282828] border border-white/10 rounded-lg p-3 text-xs font-mono text-[#d4d4d4] focus:outline-none focus:border-[#2cbb5d] resize-none" placeholder="Enter expected stdout..."></textarea>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center justify-between pt-2 border-t border-white/5">
+                                <div class="text-2xs text-text-tertiary font-mono">
+                                    💡 Test code against these test cases before analyzing
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <button id="btn-panel-run" class="lc-run-btn !h-8 !px-3.5 text-xs font-medium" onclick="SessionView.dryRun()">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+                                        <span>Run</span>
+                                    </button>
+                                    <button id="btn-panel-submit" class="lc-submit-btn !h-8 !px-4 text-xs font-medium" onclick="SessionView.submit()">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                                        <span>Submit</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tab 2: Test Result Outcome -->
+                        <div id="panel-test-results" class="btm-content hidden overflow-y-auto thin-scroll">
+                            <div class="p-6 text-center text-text-tertiary text-xs">
+                                Click <strong class="text-white">Run</strong> to execute test cases or <strong class="text-white">Submit</strong> for full verification.
+                            </div>
+                        </div>
+
+                        <!-- Tab 3: AI Verdict Analysis -->
+                        <div id="panel-analysis" class="btm-content hidden overflow-y-auto thin-scroll">
+                            <div id="chat-thread" class="min-h-0">
+                                <div class="p-6 text-center text-text-tertiary text-xs">
+                                    Submit your code to receive deterministic scoring and AI optimization analysis.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tab 4: Raw Output -->
+                        <div id="panel-output" class="btm-content hidden overflow-y-auto thin-scroll p-4">
+                            <pre id="output-content" class="text-[#d4d4d4] text-[13px] font-mono whitespace-pre-wrap leading-relaxed">No output.</pre>
+                        </div>
                     </div>
                 </div>
             </main>
 
-            <!-- Right: Analysis -->
-            <aside id="right-panel" class="w-[380px] bg-surface border-l border-border-subtle flex flex-col shrink-0">
-                <div id="problem-header" class="px-5 py-4 border-b border-border-subtle">
-                    <span class="text-[11px] font-semibold text-text-tertiary uppercase tracking-[0.15em] block mb-2">Problem Statement</span>
-                    <div id="problem-description" class="text-[13px] text-text-secondary max-h-[200px] overflow-y-auto thin-scroll leading-relaxed">
-                        <p class="text-text-tertiary italic">Create a session to begin evaluation.</p>
-                    </div>
-                </div>
-
-                <div id="chat-thread" class="flex-1 overflow-y-auto thin-scroll px-5 py-4 space-y-3">
-                    <div class="feed-card">
-                        <p class="text-[13px] text-text-secondary">Welcome to <span class="font-semibold text-text-primary">Solution Evaluation</span>.</p>
-                        <p class="text-[12px] text-text-tertiary mt-1.5 leading-relaxed">Submit your code to execute against verified AI-generated test cases and receive a score breakdown.</p>
-                    </div>
-                </div>
-            </aside>
+            <!-- Scrim for the mobile drawers (sessions / description) -->
+            <div id="sidebar-scrim" class="sidebar-scrim" onclick="App.closeDrawers()" aria-hidden="true"></div>
         </section>
 
 
@@ -479,7 +681,7 @@
              4. HISTORY VIEW
              ==================================================================== -->
         <section id="view-history" class="h-full overflow-y-auto thin-scroll hidden">
-            <div class="px-8 md:px-12 py-10">
+            <div class="px-5 sm:px-8 md:px-12 py-10">
                 <div class="flex flex-wrap items-end justify-between gap-4 mb-8">
                     <div>
                         <div class="hero-eyebrow mb-2">Archive</div>
@@ -499,7 +701,8 @@
                         <button id="hist-tab-eval" class="hist-tab" onclick="HistoryUI.setTab('evaluation')">Evaluations</button>
                     </div>
                     <div class="flex items-center gap-2 w-full md:w-auto">
-                        <input id="hist-search" type="text" placeholder="Search history..." onkeyup="if(event.key==='Enter') HistoryUI.load()" class="field-input !w-64 text-[13px]">
+                        <label for="hist-search" class="sr-only">Search history</label>
+                        <input id="hist-search" type="search" placeholder="Search history..." oninput="HistoryUI.debouncedLoad()" class="field-input !w-full md:!w-64 text-[13px]">
                         <button onclick="HistoryUI.load()" class="cmd-btn cmd-primary text-[13px]">Search</button>
                     </div>
                 </div>
@@ -514,7 +717,7 @@
              5. ABOUT VIEW
              ==================================================================== -->
         <section id="view-about" class="h-full overflow-y-auto thin-scroll hidden">
-            <div class="max-w-6xl px-8 md:px-12 py-10">
+            <div class="max-w-6xl px-5 sm:px-8 md:px-12 py-10">
                 <div class="mb-10">
                     <div class="hero-eyebrow mb-3">The Platform</div>
                     <h2 class="text-[32px] font-display font-semibold tracking-[-0.03em]">About Verdict</h2>
@@ -559,8 +762,8 @@
                         <h3 class="text-[18px] font-display font-medium mb-5">Tech Stack</h3>
                         <dl class="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-3 text-[14px]">
                             <div class="flex gap-3"><dt class="text-text-tertiary font-medium min-w-[80px]">Backend</dt><dd class="text-text-primary font-mono">FastAPI + SQLAlchemy</dd></div>
-                            <div class="flex gap-3"><dt class="text-text-tertiary font-medium min-w-[80px]">AI</dt><dd class="text-text-primary font-mono">Gemini 2.0 / Groq</dd></div>
-                            <div class="flex gap-3"><dt class="text-text-tertiary font-medium min-w-[80px]">Sandbox</dt><dd class="text-text-primary font-mono">Piston API</dd></div>
+                            <div class="flex gap-3"><dt class="text-text-tertiary font-medium min-w-[80px]">AI</dt><dd class="text-text-primary font-mono">Gemini / Groq</dd></div>
+                            <div class="flex gap-3"><dt class="text-text-tertiary font-medium min-w-[80px]">Sandbox</dt><dd class="text-text-primary font-mono">Native Local Runner (C++, Py, Java, JS)</dd></div>
                             <div class="flex gap-3"><dt class="text-text-tertiary font-medium min-w-[80px]">Database</dt><dd class="text-text-primary font-mono">SQLite (async)</dd></div>
                             <div class="flex gap-3"><dt class="text-text-tertiary font-medium min-w-[80px]">Frontend</dt><dd class="text-text-primary font-mono">SPA + Monaco Editor</dd></div>
                             <div class="flex gap-3"><dt class="text-text-tertiary font-medium min-w-[80px]">Charts</dt><dd class="text-text-primary font-mono">Chart.js 4</dd></div>
@@ -577,9 +780,9 @@
 
     <!-- History Detail Modal -->
     <div id="hist-detail-modal" class="modal-overlay hidden">
-        <div class="modal-box w-[720px]">
+        <div class="modal-box w-[720px]" role="dialog" aria-modal="true" aria-labelledby="hist-detail-title" tabindex="-1">
             <div class="modal-head">
-                <span class="text-[15px] font-display font-medium text-text-primary">History Record Details</span>
+                <span id="hist-detail-title" class="text-[15px] font-display font-medium text-text-primary">History Record Details</span>
                 <button class="modal-x" onclick="HistoryUI.closeModal()">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
@@ -591,11 +794,45 @@
         </div>
     </div>
 
+    <!-- Problem List Catalog Modal (LeetCode Style) -->
+    <div id="problem-list-modal" class="modal-overlay hidden">
+        <div class="modal-box w-[840px] max-w-[94vw]" role="dialog" aria-modal="true" aria-labelledby="problem-list-title" tabindex="-1">
+            <div class="modal-head">
+                <div class="flex items-center gap-2">
+                    <span class="text-[#2cbb5d] font-bold text-lg">≡</span>
+                    <span id="problem-list-title" class="text-[16px] font-bold text-white font-mono">Problem Catalog</span>
+                </div>
+                <button class="modal-x" onclick="App.closeProblemList()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+            <div class="modal-body space-y-4">
+                <div class="flex flex-wrap items-center gap-3">
+                    <input id="problem-catalog-search" type="search" placeholder="Search questions by title, topic, or keyword..." oninput="App.filterProblemCatalog()" class="field-input flex-1 min-w-[220px] text-xs">
+                    <div class="flex items-center gap-1.5" id="problem-diff-filters">
+                        <button class="lc-chip active" data-diff="all" onclick="App.setProblemCatalogDiff('all')">All</button>
+                        <button class="lc-chip text-[#2cbb5d]" data-diff="easy" onclick="App.setProblemCatalogDiff('easy')">Easy</button>
+                        <button class="lc-chip text-[#f59e0b]" data-diff="medium" onclick="App.setProblemCatalogDiff('medium')">Medium</button>
+                        <button class="lc-chip text-[#f43f5e]" data-diff="hard" onclick="App.setProblemCatalogDiff('hard')">Hard</button>
+                    </div>
+                </div>
+
+                <div id="problem-catalog-list" class="max-h-[55vh] overflow-y-auto thin-scroll space-y-2">
+                    <!-- Populated by App.openProblemList() -->
+                </div>
+            </div>
+            <div class="modal-foot justify-between">
+                <button class="cmd-btn cmd-primary text-xs" onclick="App.closeProblemList(); NewSessionModal.open();">+ Create Custom Problem</button>
+                <button class="cmd-btn cmd-secondary text-xs" onclick="App.closeProblemList()">Close</button>
+            </div>
+        </div>
+    </div>
+
     <!-- New Session Modal -->
     <div id="new-session-modal" class="modal-overlay hidden">
-        <div class="modal-box w-[520px]">
+        <div class="modal-box w-[520px]" role="dialog" aria-modal="true" aria-labelledby="new-session-title" tabindex="-1">
             <div class="modal-head">
-                <span class="text-[15px] font-display font-medium text-text-primary">New Evaluation Session</span>
+                <span id="new-session-title" class="text-[15px] font-display font-medium text-text-primary">New Evaluation Session</span>
                 <button class="modal-x" onclick="NewSessionModal.close()">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
@@ -612,6 +849,9 @@
                         </button>
                         <button class="lang-pill" data-lang="java" onclick="NewSessionModal.selectLanguage('java')">
                             <span class="lang-dot bg-[#b07219]"></span>Java
+                        </button>
+                        <button class="lang-pill" data-lang="javascript" onclick="NewSessionModal.selectLanguage('javascript')">
+                            <span class="lang-dot bg-[#f7df1e]"></span>JavaScript
                         </button>
                     </div>
                 </div>
@@ -657,9 +897,9 @@
 
     <!-- Leaderboard Modal -->
     <div id="leaderboard-modal" class="modal-overlay hidden">
-        <div class="modal-box w-[720px]">
+        <div class="modal-box w-[720px]" role="dialog" aria-modal="true" aria-labelledby="leaderboard-title" tabindex="-1">
             <div class="modal-head">
-                <span class="text-[15px] font-display font-medium text-text-primary">Leaderboard</span>
+                <span id="leaderboard-title" class="text-[15px] font-display font-medium text-text-primary">Leaderboard</span>
                 <button class="modal-x" onclick="App.closeLeaderboard()">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
@@ -683,7 +923,7 @@
 
 
     <!-- Toast Notification Container -->
-    <div id="toast-container" class="toast-container"></div>
+    <div id="toast-container" class="toast-container" role="status" aria-live="polite" aria-atomic="false"></div>
 
     <!-- ======== SCRIPTS ======== -->
     <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>

@@ -9,7 +9,7 @@ These schemas handle:
 Each schema class documents its purpose and which endpoint(s) use it.
 """
 
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
@@ -41,6 +41,7 @@ class Language(str, Enum):
     PYTHON = "python"
     CPP = "cpp"
     JAVA = "java"
+    JAVASCRIPT = "javascript"
 
 
 class Verdict(str, Enum):
@@ -156,23 +157,61 @@ class SessionCreate(BaseModel):
     code: str = Field("", description="Initial code (can be empty, filled later)")
 
 
+class UserTestCaseInput(BaseModel):
+    """User-provided test case with stdin and expected stdout."""
+    test_id: Optional[int] = None
+    test_case_id: Optional[str] = None
+    description: Optional[str] = None
+    stdin: str = ""
+    expected_stdout: Optional[str] = ""
+    is_edge_case: bool = False
+
+
 class SessionSubmit(BaseModel):
     """
-    Schema for submitting code for evaluation.
-    
-    Sent when the user clicks "Submit" — the code is taken from the editor.
+    Schema for submitting code for evaluation or running test cases.
     """
     code: str = Field(..., min_length=1, description="The source code to evaluate")
+    language: Optional[str] = Field(None, description="Optional language override (python, cpp, java, javascript)")
+    stdin: Optional[str] = Field(None, description="Optional stdin input for test execution")
+    test_cases: Optional[List[UserTestCaseInput]] = Field(None, description="User-provided test cases to execute")
+
+
+class TestResultDetail(BaseModel):
+    """Combined test case + execution result for display in the UI."""
+    test_case_id: Optional[str] = None
+    description: Optional[str] = None
+    stdin: str
+    expected_stdout: str
+    actual_stdout: Optional[str] = None
+    passed: bool
+    is_edge_case: bool
+    time_ms: Optional[float] = None
+    stderr: Optional[str] = None
+
+
+class RunTestsResponse(BaseModel):
+    """Response schema for running multiple test cases."""
+    passed: bool
+    total: int
+    passed_count: int
+    failed_count: int
+    results: List[TestResultDetail]
+    time_ms: float = 0.0
+    error_line: Optional[int] = None
+    stderr: Optional[str] = None
 
 
 class DryRunResultResponse(BaseModel):
-    """Response schema for a dry-run result."""
-    dry_run_id: int
+    """Response schema for a dry-run or test execution result."""
+    dry_run_id: Optional[int] = None
     passed: bool
     stdout: Optional[str] = None
     stderr: Optional[str] = None
     error_line: Optional[int] = None
-    created_at: datetime
+    time_ms: Optional[float] = None
+    test_results: Optional[List[TestResultDetail]] = None
+    created_at: Optional[datetime] = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -197,19 +236,6 @@ class ExecutionResultResponse(BaseModel):
     stderr: Optional[str] = None
     time_ms: Optional[float] = None
     model_config = ConfigDict(from_attributes=True)
-
-
-class TestResultDetail(BaseModel):
-    """Combined test case + execution result for display in the UI."""
-    test_case_id: Optional[str] = None
-    description: Optional[str] = None
-    stdin: str
-    expected_stdout: str
-    actual_stdout: Optional[str] = None
-    passed: bool
-    is_edge_case: bool
-    time_ms: Optional[float] = None
-    stderr: Optional[str] = None
 
 
 class FailingCaseDetail(BaseModel):
@@ -312,11 +338,42 @@ class LeaderboardResponse(BaseModel):
 
 class GeminiTestCase(BaseModel):
     """A single test case from the Gemini 'first' response."""
-    id: str
-    description: str
-    stdin: str
-    expected_stdout: str
+    id: str = "tc_1"
+    description: Optional[str] = ""
+    stdin: str = ""
+    expected_stdout: str = ""
     edge_case: bool = False
+    model_config = ConfigDict(extra="ignore")
+
+    @model_validator(mode="before")
+    @classmethod
+    def map_aliases(cls, data):
+        if isinstance(data, dict):
+            # Map input aliases
+            if "stdin" not in data or data["stdin"] is None or data["stdin"] == "":
+                data["stdin"] = data.get("input", data.get("test_input", data.get("stdin_input", "")))
+            # Map output aliases
+            if "expected_stdout" not in data or data["expected_stdout"] is None or data["expected_stdout"] == "":
+                data["expected_stdout"] = data.get("output", data.get("expected_output", data.get("expected", data.get("stdout", ""))))
+            # Map edge case aliases
+            if "edge_case" not in data:
+                data["edge_case"] = data.get("is_edge_case", False)
+            # Map id aliases
+            if "id" not in data or not data["id"]:
+                data["id"] = str(data.get("test_id", data.get("test_case_id", "tc_1")))
+
+            # Normalize values to string
+            for key in ("stdin", "expected_stdout"):
+                val = data.get(key)
+                if isinstance(val, (int, float, bool)):
+                    data[key] = str(val)
+                elif isinstance(val, (list, tuple)):
+                    data[key] = " ".join(str(x) for x in val)
+                elif val is None:
+                    data[key] = ""
+                else:
+                    data[key] = str(val)
+        return data
 
 
 class GeminiFirstResponse(BaseModel):
@@ -324,61 +381,77 @@ class GeminiFirstResponse(BaseModel):
     response_type: str = "first"
     problem_understanding: str = ""
     clarifications_needed: List[str] = []
-    test_cases: List[GeminiTestCase]
+    test_cases: List[GeminiTestCase] = []
     notes: str = ""
+    model_config = ConfigDict(extra="ignore")
 
 
 class GeminiComplexity(BaseModel):
     """Complexity analysis from the Gemini 'second' response."""
-    time: str
-    space: str
-    is_optimal: bool
-    optimal_time: str
-    optimal_space: str
+    time: str = "O(N)"
+    space: str = "O(1)"
+    is_optimal: bool = True
+    optimal_time: str = "O(N)"
+    optimal_space: str = "O(1)"
+    model_config = ConfigDict(extra="ignore")
 
 
 class GeminiChartDataset(BaseModel):
     """A single dataset in the complexity chart."""
-    label: str
-    values: List[float]
+    label: str = "Solution"
+    values: List[float] = []
+    model_config = ConfigDict(extra="ignore")
 
 
 class GeminiChart(BaseModel):
     """Chart data from the Gemini 'second' response."""
     type: str = "bar"
-    labels: List[str]
-    datasets: List[GeminiChartDataset]
+    labels: List[str] = []
+    datasets: List[GeminiChartDataset] = []
+    model_config = ConfigDict(extra="ignore")
 
 
 class GeminiFailingCase(BaseModel):
     """Detail about a failing test case from AI analysis."""
-    id: str
-    why_it_fails: str
-    fix_suggestion: str
+    id: str = "tc_1"
+    why_it_fails: str = ""
+    fix_suggestion: str = ""
+    model_config = ConfigDict(extra="ignore")
 
 
 class GeminiQualityIssue(BaseModel):
     """A code quality issue from AI analysis."""
-    issue: str
-    severity: str
-    suggestion: str
+    issue: str = ""
+    severity: str = "low"
+    suggestion: str = ""
+    model_config = ConfigDict(extra="ignore")
 
 
 class GeminiSecondResponse(BaseModel):
     """Parsed response from Gemini 'second' call (analysis)."""
     response_type: str = "second"
-    verdict: str
-    correctness_summary: str
+    verdict: str = "optimal"
+    correctness_summary: str = ""
     failing_cases: List[GeminiFailingCase] = []
-    complexity: GeminiComplexity
-    complexity_chart: GeminiChart
+    complexity: GeminiComplexity = GeminiComplexity()
+    complexity_chart: GeminiChart = GeminiChart()
     optimization_suggestions: List[str] = []
-    code_explanation: str
-    quality_score: int = Field(ge=0, le=100)
-    readability_score: int = Field(ge=0, le=100)
-    documentation_score: int = Field(ge=0, le=100)
+    code_explanation: str = ""
+    quality_score: int = 80
+    readability_score: int = 80
+    documentation_score: int = 80
     quality_issues: List[GeminiQualityIssue] = []
     final_notes: str = ""
+    model_config = ConfigDict(extra="ignore")
+
+    @field_validator("quality_score", "readability_score", "documentation_score", mode="before")
+    @classmethod
+    def clamp_score(cls, v):
+        try:
+            val = int(round(float(v)))
+            return max(0, min(100, val))
+        except (ValueError, TypeError):
+            return 80
 
 
 # ============================================================================

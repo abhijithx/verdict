@@ -1,11 +1,11 @@
 """
-orchestrator.py — Main pipeline orchestrator for CodeScore AI.
+orchestrator.py — Main pipeline orchestrator for Verdict AI Platform.
 
 This module runs the complete evaluation pipeline for a submission:
-  1. Dry run (compile/runtime check via Piston)
-  2. Gemini "first" call (generate test cases)
-  3. Execute all test cases via Piston
-  4. Gemini "second" call (analyze with real execution results)
+  1. Dry run (compile/runtime check via native local runner)
+  2. AI "first" call (generate edge-case test cases)
+  3. Execute all test cases via native local runner
+  4. AI "second" call (analyze with real execution results)
   5. Scoring engine (deterministic weighted score computation)
 
 The orchestrator updates the session status at each step so the frontend
@@ -23,7 +23,7 @@ from models import (
     Session, DryRunResult, GeneratedTestCase,
     ExecutionResult, AnalysisResult, EvaluationProfile
 )
-from pipeline.piston_client import piston_client
+from pipeline.code_runner import code_runner as piston_client
 from pipeline.error_parser import parse_error_line, extract_error_message
 from pipeline.gemini_first import generate_test_cases
 from pipeline.gemini_second import analyze_code, _format_test_results_for_ai
@@ -98,10 +98,16 @@ async def run_pipeline(session_id: int):
                 return
 
             # ================================================================
-            # STEP 1: Dry Run — compile/runtime check
+            # STEP 1: Dry Run — compile/runtime check with testcase stdin if available
             # ================================================================
-            print(f"[PIPELINE] Step 1: Dry run for session {session_id}")
-            dry_run_result = await piston_client.dry_run(session.code, session.language)
+            existing_tcs_res = await db.execute(
+                select(GeneratedTestCase).where(GeneratedTestCase.session_id == session_id)
+            )
+            db_test_cases = list(existing_tcs_res.scalars().all())
+            first_stdin = db_test_cases[0].stdin if db_test_cases else ""
+
+            print(f"[PIPELINE] Step 1: Dry run for session {session_id} (using stdin sample: {bool(first_stdin)})")
+            dry_run_result = await piston_client.dry_run(session.code, session.language, stdin=first_stdin)
 
             # Save the dry run result to the database
             db_dry_run = DryRunResult(
@@ -121,50 +127,53 @@ async def run_pipeline(session_id: int):
                 return
 
             # ================================================================
-            # STEP 2: Gemini "First" — generate test cases
+            # STEP 2: Augment with AI Edge Cases if needed
             # ================================================================
-            await _update_status(db, session_id, "generating_tests")
-            print(f"[PIPELINE] Step 2: Generating test cases for session {session_id}")
+            # Augment with AI test cases if fewer than 4 test cases exist
+            if len(db_test_cases) < 4:
+                await _update_status(db, session_id, "generating_tests")
+                print(f"[PIPELINE] Step 2: Generating AI edge cases for session {session_id} (already has {len(db_test_cases)} user cases)")
 
-            from pipeline.gemini_first import generate_test_cases, TestGenerationFailedError
+                from pipeline.gemini_first import generate_test_cases, TestGenerationFailedError
 
-            try:
-                first_response = await generate_test_cases(
-                    code=session.code,
-                    language=session.language,
-                    problem_statement=problem.description,
-                    history_summary=session.history_summary,
-                )
-            except TestGenerationFailedError as e:
-                session.history_summary = f"Pipeline halted: {str(e)}"
-                await db.commit()
-                await _update_status(db, session_id, "failed")
-                print(f"[PIPELINE] Session {session_id} halted — test generation failed, no fallback test data used.")
-                return
+                try:
+                    first_response = await generate_test_cases(
+                        code=session.code,
+                        language=session.language,
+                        problem_statement=problem.description,
+                        history_summary=session.history_summary,
+                    )
+                    for tc in first_response.test_cases:
+                        # Avoid duplicates
+                        tc_stdin = (tc.stdin or "").strip()
+                        if any(etc.stdin.strip() == tc_stdin for etc in db_test_cases):
+                            continue
+                        db_tc = GeneratedTestCase(
+                            session_id=session_id,
+                            test_case_id=tc.id or f"ai_{len(db_test_cases) + 1}",
+                            description=tc.description or "AI edge case",
+                            stdin=tc.stdin if tc.stdin is not None else "",
+                            expected_stdout=tc.expected_stdout if tc.expected_stdout is not None else "",
+                            is_edge_case=tc.edge_case,
+                        )
+                        db.add(db_tc)
+                        db_test_cases.append(db_tc)
 
-            # Save generated test cases to the database
-            db_test_cases = []
-            for tc in first_response.test_cases:
-                db_tc = GeneratedTestCase(
-                    session_id=session_id,
-                    test_case_id=tc.id,
-                    description=tc.description,
-                    stdin=tc.stdin,
-                    expected_stdout=tc.expected_stdout,
-                    is_edge_case=tc.edge_case,
-                )
-                db.add(db_tc)
-                db_test_cases.append(db_tc)
-            
-            await db.commit()
-            # Refresh to get auto-generated test_id values
-            for tc in db_test_cases:
-                await db.refresh(tc)
+                    await db.commit()
+                    for tc in db_test_cases:
+                        await db.refresh(tc)
+                except Exception as e:
+                    print(f"[PIPELINE] Warning: AI test generation note ({e}), proceeding with {len(db_test_cases)} test cases.")
+                    if not db_test_cases:
+                        session.history_summary = f"Pipeline halted: {str(e)}"
+                        await db.commit()
+                        await _update_status(db, session_id, "failed")
+                        return
 
-            print(f"[PIPELINE] Generated {len(db_test_cases)} test cases")
+            print(f"[PIPELINE] Total {len(db_test_cases)} test cases prepared for execution")
 
             # ================================================================
-            # STEP 3: Execute all test cases via Piston
+            # STEP 3: Execute all test cases via Local Sandbox
             # ================================================================
             await _update_status(db, session_id, "executing")
             print(f"[PIPELINE] Step 3: Executing {len(db_test_cases)} test cases")
@@ -193,6 +202,15 @@ async def run_pipeline(session_id: int):
 
             passed_count = sum(1 for r in exec_results if r.passed)
             print(f"[PIPELINE] Tests: {passed_count}/{len(exec_results)} passed")
+
+            # Ensure code runs successfully before AI analysis
+            # If all test cases failed with runtime error or compilation error, halt before AI analysis
+            if not exec_results or (passed_count == 0 and any(r.stderr for r in exec_results)):
+                await _update_status(db, session_id, "dry_run_failed")
+                session.history_summary = "Pipeline halted: all test cases failed execution or encountered runtime errors."
+                await db.commit()
+                print(f"[PIPELINE] Halting pipeline for session {session_id}: code failed execution on test cases.")
+                return
 
             # ================================================================
             # STEP 4: Gemini "Second" — analyze with real results

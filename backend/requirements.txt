@@ -1,27 +1,28 @@
-# CodeScore AI - Backend Dependencies
+# Verdict AI - Backend Dependencies
 # FastAPI framework + ASGI server
-fastapi==0.115.0
-uvicorn[standard]==0.30.0
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
 
 # Database ORM + async support
-sqlalchemy==2.0.32
-aiosqlite==0.20.0
+sqlalchemy[asyncio]>=2.0.32
+aiosqlite>=0.20.0
+greenlet>=3.0.0
 
 # Data validation
-pydantic==2.8.0
-pydantic-settings==2.4.0
+pydantic>=2.8.0
+pydantic-settings>=2.4.0
 
-# Async HTTP client (for Piston API + Gemini API calls)
-httpx==0.27.0
+# Async HTTP client (for AI Provider APIs)
+httpx>=0.27.0
 
 # Google Gemini AI SDK
-google-generativeai==0.8.0
+google-generativeai>=0.8.0
 
 # PDF report generation
-reportlab==4.2.0
+reportlab>=4.2.0
 
 # Environment variable management
-python-dotenv==1.0.1
+python-dotenv>=1.0.1
 
 # CORS middleware (included in FastAPI/Starlette, listed for clarity)
 # starlette[full] — already a FastAPI dependency
