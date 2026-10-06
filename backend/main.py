@@ -25,7 +25,7 @@ from sqlalchemy import select
 
 from database import init_db, get_db, AsyncSessionLocal
 from seed_data import run_seeds
-from routers import sessions, problems, evaluation_profiles, recommendation, evaluation, history
+from routers import sessions, problems, evaluation_profiles, recommendation, evaluation, history, leetcode
 from models import Session, AnalysisResult, GeneratedTestCase, ExecutionResult, Problem
 
 
@@ -98,6 +98,13 @@ app.include_router(evaluation_profiles.router)    # /api/evaluation-profiles/*
 app.include_router(recommendation.router)         # /api/recommendation
 app.include_router(evaluation.router)             # /api/evaluation
 app.include_router(history.router)                # /api/history
+app.include_router(leetcode.router)               # /api/leetcode/*
+
+
+@app.get("/api/health")
+async def health_check():
+    """Health check endpoint for platform monitoring."""
+    return {"status": "ok", "version": "2.0.0"}
 
 
 

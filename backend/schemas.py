@@ -10,7 +10,7 @@ Each schema class documents its purpose and which endpoint(s) use it.
 """
 
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 from enum import Enum
 
@@ -143,6 +143,29 @@ class ProblemResponse(BaseModel):
 # Session Schemas
 # ============================================================================
 
+class UserTestCaseInput(BaseModel):
+    """User-provided test case with stdin and expected stdout."""
+    test_id: Optional[int] = None
+    test_case_id: Optional[str] = None
+    description: Optional[str] = None
+    stdin: str = ""
+    expected_stdout: Optional[str] = ""
+    is_edge_case: bool = False
+    model_config = ConfigDict(extra="ignore")
+
+    @model_validator(mode="before")
+    @classmethod
+    def map_aliases(cls, data):
+        if isinstance(data, dict):
+            if "stdin" not in data or data["stdin"] is None or data["stdin"] == "":
+                data["stdin"] = str(data.get("input", data.get("test_input", data.get("stdin_input", ""))))
+            if "expected_stdout" not in data or data["expected_stdout"] is None or data["expected_stdout"] == "":
+                data["expected_stdout"] = str(data.get("expected_output", data.get("output", data.get("expected", ""))))
+            if "edge_case" in data and "is_edge_case" not in data:
+                data["is_edge_case"] = bool(data["edge_case"])
+        return data
+
+
 class SessionCreate(BaseModel):
     """
     Schema for creating a new session (from the New Session modal).
@@ -155,16 +178,7 @@ class SessionCreate(BaseModel):
                                   description="Label for this submission (e.g., candidate name)")
     profile_id: Optional[int] = Field(None, description="Evaluation profile ID (uses default if not set)")
     code: str = Field("", description="Initial code (can be empty, filled later)")
-
-
-class UserTestCaseInput(BaseModel):
-    """User-provided test case with stdin and expected stdout."""
-    test_id: Optional[int] = None
-    test_case_id: Optional[str] = None
-    description: Optional[str] = None
-    stdin: str = ""
-    expected_stdout: Optional[str] = ""
-    is_edge_case: bool = False
+    test_cases: Optional[List[UserTestCaseInput]] = Field(None, description="Initial test cases for problem")
 
 
 class SessionSubmit(BaseModel):
@@ -302,6 +316,7 @@ class SessionResponse(BaseModel):
     profile: Optional[EvaluationProfileResponse] = None
     dry_run: Optional[DryRunResultResponse] = None
     test_results: Optional[List[TestResultDetail]] = None
+    test_cases: Optional[List[TestCaseResponse]] = None
     analysis: Optional[AnalysisResultResponse] = None
     model_config = ConfigDict(from_attributes=True)
 
@@ -475,9 +490,18 @@ class RecommendationRequest(BaseModel):
     preferred_language: Optional[str] = Field(None, description="Preferred programming language (None = auto-select best language)")
 
 
+class RecommendationTestCase(BaseModel):
+    """Test case from recommendation for code evaluation."""
+    stdin: str = ""
+    expected_stdout: str = ""
+    description: Optional[str] = "Sample Case"
+
+
 class RecommendationResponse(BaseModel):
     """Structured response payload for Solution Recommendation module."""
     id: Optional[int] = None
+    title: Optional[str] = "Optimal Solution"
+    difficulty: Optional[str] = "medium"
     category: str
     recommended_algorithm: str
     recommended_data_structure: str
@@ -487,7 +511,26 @@ class RecommendationResponse(BaseModel):
     optimized_code: str
     explanation: str
     alternative_approaches: List[AlternativeApproach] = []
+    sample_test_cases: Optional[List[RecommendationTestCase]] = []
     timestamp: Optional[datetime] = None
+
+
+class RecommendationAskRequest(BaseModel):
+    """Request payload for asking questions / chatting about a recommendation."""
+    problem: str = Field(..., min_length=1, description="Programming problem description")
+    code: Optional[str] = Field(None, description="Current reference code")
+    algorithm: Optional[str] = Field(None, description="Recommended algorithm name")
+    language: Optional[str] = Field(None, description="Programming language")
+    question: str = Field(..., min_length=1, description="User question or instruction")
+    chat_history: Optional[List[Dict[str, str]]] = Field(default=[], description="Previous conversation turns")
+
+
+class RecommendationAskResponse(BaseModel):
+    """AI Copilot response for recommendation Q&A."""
+    answer: str
+    suggested_improvements: List[str] = []
+    code_update: Optional[str] = None
+
 
 
 class EvaluationRequest(BaseModel):
@@ -497,6 +540,11 @@ class EvaluationRequest(BaseModel):
     user_code: str = Field(..., min_length=1, description="Source code implementation")
     submission_label: Optional[str] = Field("Solution Evaluation", description="Label for submission")
     profile_id: Optional[int] = Field(None, description="Evaluation profile ID")
+    constraints: Optional[str] = Field(None, description="Optional problem constraints")
+    sample_input: Optional[str] = Field(None, description="Optional sample input")
+    sample_output: Optional[str] = Field(None, description="Optional sample output")
+    difficulty: Optional[str] = Field("medium", description="Difficulty level")
+    test_cases: Optional[List[UserTestCaseInput]] = Field(None, description="Optional test cases")
 
 
 class HistoryItemSummary(BaseModel):
@@ -529,4 +577,45 @@ class PlatformStatsResponse(BaseModel):
     completed_evaluations: int = 0
     average_score: float = 0.0
     language_breakdown: dict = {}
+
+
+# ============================================================================
+# LeetCode Integration Schemas
+# ============================================================================
+
+class LeetCodeImportRequest(BaseModel):
+    """Request to import or fetch a problem from LeetCode."""
+    url_or_slug: str = Field(..., min_length=1, description="LeetCode URL (e.g., https://leetcode.com/problems/two-sum/) or slug ('two-sum')")
+    auto_save_problem: bool = Field(default=False, description="Whether to automatically persist into Problem catalog")
+
+
+class LeetCodeCatalogItem(BaseModel):
+    """A problem summary row from the LeetCode catalog."""
+    frontend_id: Optional[str] = None
+    title: str
+    title_slug: str
+    difficulty: str
+    topic_tags: List[str] = []
+
+
+class LeetCodeCatalogResponse(BaseModel):
+    """Response containing paginated LeetCode problems and optional curated list."""
+    total: int
+    questions: List[LeetCodeCatalogItem]
+    curated: Optional[List[Dict[str, Any]]] = None
+
+
+class LeetCodeProblemDetailResponse(BaseModel):
+    """Complete imported LeetCode problem specification."""
+    question_id: Optional[str] = None
+    frontend_id: Optional[str] = None
+    title: str
+    title_slug: str
+    difficulty: str
+    description: str
+    topic_tags: List[str] = []
+    code_snippets: Dict[str, str] = {}
+    sample_test_cases: List[Dict[str, Any]] = []
+    hints: List[str] = []
+    problem_id: Optional[int] = Field(None, description="Database problem ID if persisted")
 

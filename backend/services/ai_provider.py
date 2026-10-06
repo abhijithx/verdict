@@ -85,9 +85,9 @@ async def _call_groq(
         payload["response_format"] = {"type": "json_object"}
         resp = await client.post(url, headers=headers, json=payload)
 
-        if resp.status_code == 400 and "json_validate_failed" in resp.text:
+        if resp.status_code == 400:
             # Fallback attempt without rigid json_object enforcement
-            logger.warning("Groq json_object format failed; retrying without response_format...")
+            logger.warning(f"Groq json_object format rejected ({resp.text[:120]}); retrying without response_format...")
             payload.pop("response_format", None)
             resp = await client.post(url, headers=headers, json=payload)
 

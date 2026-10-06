@@ -33,9 +33,13 @@ const Toast = {
             <span class="toast-msg">${this._escape(message)}</span>
             <button class="toast-close" onclick="this.parentElement.remove()">&times;</button>
         `;
+        // Remove duplicate toasts with identical message
+        const existing = Array.from(container.children).filter(t => t.querySelector('.toast-msg')?.textContent === message);
+        existing.forEach(e => e.remove());
+
         container.appendChild(toast);
 
-        while (container.children.length > 5) {
+        while (container.children.length > 2) {
             container.firstElementChild.remove();
         }
 
@@ -65,9 +69,11 @@ const App = {
     _timerSeconds: 0,
     _timerInterval: null,
     _timerRunning: false,
+    _collapsedProblems: new Set(),
 
     async init() {
         console.log('[APP] init');
+        this._initCollapsedProblems();
         try {
             await MonacoSetup.init('editor-container', 'python');
         } catch (e) {
@@ -75,10 +81,33 @@ const App = {
         }
         await this.refreshSidebar();
         await this._loadProblemDropdowns();
+        this.loadStats();
         
         // Handle hash navigation
         window.addEventListener('hashchange', () => this._handleRoute());
         this._handleRoute();
+
+        // Initialize SessionView & Resizers
+        if (typeof SessionView !== 'undefined' && SessionView.init) {
+            SessionView.init();
+        }
+
+        // Initialize LeetCode Problem Explorer
+        if (typeof LeetCodeModal !== 'undefined' && LeetCodeModal.init) {
+            LeetCodeModal.init();
+        }
+
+        // Restore desktop panel collapse states
+        if (window.innerWidth >= 1024 && localStorage.getItem('verdict_sidebar_collapsed') === '1') {
+            document.body.classList.add('sidebar-collapsed');
+            const btn = document.querySelector('.ed-panel-toggle[onclick*="toggleSidebar"]');
+            if (btn) btn.classList.add('opacity-50');
+        }
+        if (window.innerWidth >= 1280 && localStorage.getItem('verdict_desc_collapsed') === '1') {
+            document.body.classList.add('desc-collapsed');
+            const btn = document.querySelector('.ed-panel-toggle[onclick*="toggleDescription"]');
+            if (btn) btn.classList.add('opacity-50');
+        }
 
         // Dismiss modals with Escape / overlay click, and reset panels on resize
         this._initDismissals();
@@ -86,15 +115,23 @@ const App = {
             if (window.innerWidth >= 768) this.closeMobileNav();
             if (window.innerWidth >= 1024) document.body.classList.remove('sidebar-open');
             if (window.innerWidth >= 1280) document.body.classList.remove('desc-open');
+            if (typeof MonacoSetup !== 'undefined' && MonacoSetup.layout) {
+                MonacoSetup.layout();
+            }
+            if (typeof RecommendationUI !== 'undefined' && RecommendationUI.editor) {
+                RecommendationUI.editor.layout();
+            }
         });
 
-        this.startTimer();
+        // Auto-pause timer initially until a coding session view is loaded
     },
 
     // ── Timer in top navigation (LeetCode style) ──
     startTimer() {
         if (this._timerInterval) clearInterval(this._timerInterval);
         this._timerRunning = true;
+        const icon = document.getElementById('timer-icon');
+        if (icon) icon.textContent = '⏸';
         this._timerInterval = setInterval(() => {
             if (!this._timerRunning) return;
             this._timerSeconds++;
@@ -102,11 +139,17 @@ const App = {
         }, 1000);
     },
 
-    toggleTimer() {
-        this._timerRunning = !this._timerRunning;
+    pauseTimer() {
+        this._timerRunning = false;
         const icon = document.getElementById('timer-icon');
-        if (icon) {
-            icon.textContent = this._timerRunning ? '⏸' : '▶';
+        if (icon) icon.textContent = '▶';
+    },
+
+    toggleTimer() {
+        if (this._timerRunning) {
+            this.pauseTimer();
+        } else {
+            this.startTimer();
         }
     },
 
@@ -129,8 +172,29 @@ const App = {
 
     _handleRoute() {
         const hash = (window.location.hash || '#home').replace('#', '');
+        const cleanView = hash.split('?')[0].split('/')[0];
         const validViews = ['home', 'recommendation', 'evaluation', 'history', 'about'];
-        const activeView = validViews.includes(hash) ? hash : 'home';
+        const activeView = validViews.includes(cleanView) ? cleanView : 'home';
+        const isEval = activeView === 'evaluation';
+
+        // Check if a session ID is specified in the URL hash: #evaluation?session=12 or #evaluation/12
+        if (isEval) {
+            const queryMatch = hash.match(/[?&]session=(\d+)/);
+            const slashMatch = hash.match(/evaluation\/(\d+)/);
+            const targetSessionId = queryMatch ? parseInt(queryMatch[1], 10) : (slashMatch ? parseInt(slashMatch[1], 10) : null);
+            if (targetSessionId && targetSessionId !== this._currentSessionId) {
+                this._currentSessionId = targetSessionId;
+            }
+        }
+
+        // Set eval-mode on topbar to keep Home / other views ultra-clean
+        const topBar = document.getElementById('top-bar');
+        if (topBar) {
+            topBar.classList.toggle('eval-mode', isEval);
+        }
+
+        const btnNewSession = document.getElementById('btn-top-new-session');
+        if (btnNewSession) btnNewSession.style.setProperty('display', isEval ? 'none' : 'inline-flex', 'important');
 
         // Update nav item active states (desktop + mobile)
         document.querySelectorAll('.nav-link').forEach(link => {
@@ -208,15 +272,124 @@ const App = {
         }
     },
 
+    _initCollapsedProblems() {
+        try {
+            const saved = localStorage.getItem('verdict_collapsed_problems');
+            if (saved) {
+                const arr = JSON.parse(saved);
+                if (Array.isArray(arr)) {
+                    this._collapsedProblems = new Set(arr.map(String));
+                }
+            }
+        } catch (e) {
+            this._collapsedProblems = new Set();
+        }
+    },
+
+    _saveCollapsedProblems() {
+        try {
+            localStorage.setItem('verdict_collapsed_problems', JSON.stringify(Array.from(this._collapsedProblems)));
+        } catch (e) {}
+    },
+
+    toggleProblemAccordion(problemId) {
+        const pid = String(problemId);
+        const itemEl = document.querySelector(`.vsc-problem-accordion[data-problem-id="${pid}"]`);
+        if (this._collapsedProblems.has(pid)) {
+            this._collapsedProblems.delete(pid);
+            if (itemEl) {
+                itemEl.classList.remove('is-collapsed');
+                const tree = itemEl.querySelector('.vsc-session-tree');
+                const chevron = itemEl.querySelector('.vsc-chevron');
+                const header = itemEl.querySelector('.vsc-accordion-header');
+                if (tree) tree.classList.remove('hidden');
+                if (chevron) chevron.classList.add('rotate-90');
+                if (header) header.setAttribute('aria-expanded', 'true');
+            }
+        } else {
+            this._collapsedProblems.add(pid);
+            if (itemEl) {
+                itemEl.classList.add('is-collapsed');
+                const tree = itemEl.querySelector('.vsc-session-tree');
+                const chevron = itemEl.querySelector('.vsc-chevron');
+                const header = itemEl.querySelector('.vsc-accordion-header');
+                if (tree) tree.classList.add('hidden');
+                if (chevron) chevron.classList.remove('rotate-90');
+                if (header) header.setAttribute('aria-expanded', 'false');
+            }
+        }
+        this._saveCollapsedProblems();
+    },
+
+    expandProblemAccordion(problemId) {
+        if (!problemId) return;
+        const pid = String(problemId);
+        if (this._collapsedProblems.has(pid)) {
+            this._collapsedProblems.delete(pid);
+            this._saveCollapsedProblems();
+        }
+        const itemEl = document.querySelector(`.vsc-problem-accordion[data-problem-id="${pid}"]`);
+        if (itemEl) {
+            itemEl.classList.remove('is-collapsed');
+            const tree = itemEl.querySelector('.vsc-session-tree');
+            const chevron = itemEl.querySelector('.vsc-chevron');
+            const header = itemEl.querySelector('.vsc-accordion-header');
+            if (tree) tree.classList.remove('hidden');
+            if (chevron) chevron.classList.add('rotate-90');
+            if (header) header.setAttribute('aria-expanded', 'true');
+        }
+    },
+
+    toggleCollapseAllProblems() {
+        const accordions = document.querySelectorAll('.vsc-problem-accordion');
+        if (accordions.length === 0) return;
+        const allCollapsed = Array.from(accordions).every(el => el.classList.contains('is-collapsed'));
+        if (allCollapsed) {
+            this._collapsedProblems.clear();
+            accordions.forEach(el => {
+                el.classList.remove('is-collapsed');
+                const tree = el.querySelector('.vsc-session-tree');
+                const chevron = el.querySelector('.vsc-chevron');
+                const header = el.querySelector('.vsc-accordion-header');
+                if (tree) tree.classList.remove('hidden');
+                if (chevron) chevron.classList.add('rotate-90');
+                if (header) header.setAttribute('aria-expanded', 'true');
+            });
+        } else {
+            accordions.forEach(el => {
+                const pid = el.dataset.problemId;
+                if (pid) this._collapsedProblems.add(String(pid));
+                el.classList.add('is-collapsed');
+                const tree = el.querySelector('.vsc-session-tree');
+                const chevron = el.querySelector('.vsc-chevron');
+                const header = el.querySelector('.vsc-accordion-header');
+                if (tree) tree.classList.add('hidden');
+                if (chevron) chevron.classList.remove('rotate-90');
+                if (header) header.setAttribute('aria-expanded', 'false');
+            });
+        }
+        this._saveCollapsedProblems();
+    },
+
+    newSessionForProblem(problemId, event) {
+        if (event) {
+            event.stopPropagation();
+            event.preventDefault();
+        }
+        if (typeof NewSessionModal !== 'undefined') {
+            NewSessionModal.open(problemId);
+        }
+    },
+
     async refreshSidebar() {
         const sessionList = document.getElementById('session-list');
         if (!sessionList) return;
 
         sessionList.innerHTML = `
             <div class="p-3 space-y-3" aria-hidden="true">
-                <div class="skeleton h-12"></div>
-                <div class="skeleton h-12"></div>
-                <div class="skeleton h-12"></div>
+                <div class="skeleton h-10"></div>
+                <div class="skeleton h-10"></div>
+                <div class="skeleton h-10"></div>
             </div>`;
 
         try {
@@ -240,7 +413,7 @@ const App = {
             }
 
             const problemMap = {};
-            for (const p of problems) problemMap[p.problem_id] = p.title;
+            for (const p of problems) problemMap[p.problem_id] = p;
 
             const grouped = {};
             for (const s of sessions) {
@@ -252,28 +425,65 @@ const App = {
             let html = '';
             for (const [problemId, problemSessions] of Object.entries(grouped)) {
                 if (this._filterProblemId && this._filterProblemId !== 'all' && String(problemId) !== String(this._filterProblemId)) continue;
-                const problemTitle = problemMap[problemId] || `Problem ${problemId}`;
-                html += `<div class="px-3 py-2 text-[11px] font-semibold text-text-tertiary uppercase tracking-wider border-b border-border-subtle font-mono">${this._esc(problemTitle)}</div>`;
+                const problemObj = problemMap[problemId] || { title: `Problem ${problemId}`, difficulty: 'Medium' };
+                const problemTitle = problemObj.title || `Problem ${problemId}`;
+                const diff = String(problemObj.difficulty || 'Medium').toLowerCase();
+                const isCollapsed = this._collapsedProblems.has(String(problemId));
 
+                let sessionsHtml = '';
                 for (const s of problemSessions) {
                     const isActive = s.session_id === this._currentSessionId;
-                    const langTag = { python: '[PY]', cpp: '[CPP]', java: '[JAVA]', javascript: '[JS]' }[s.language.toLowerCase()] || `[${s.language.substring(0,3).toUpperCase()}]`;
-                    const statusTag = { complete: '✓ DONE', failed: '✗ FAIL', dry_run_failed: '✗ ERR', draft: '• READY' }[s.status] || '⋯ RUN';
-                    const statusCls = s.status === 'complete' ? 'text-success' : (s.status.includes('failed') ? 'text-danger' : (s.status === 'draft' ? 'text-text-tertiary' : 'text-warning'));
+                    const lang = (s.language || 'python').toLowerCase();
+                    const langClass = { python: 'vsc-file-py', javascript: 'vsc-file-js', cpp: 'vsc-file-cpp', java: 'vsc-file-java' }[lang] || 'vsc-file-py';
+                    const langShort = { python: 'py', javascript: 'js', cpp: 'c++', java: 'java' }[lang] || lang.substring(0, 3);
 
-                    html += `
-                        <div class="sess-item group ${isActive ? 'active' : ''}" data-session-id="${s.session_id}" role="button" tabindex="0" aria-label="Open session ${this._esc(s.submission_label)}" onclick="App.openSession(${s.session_id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();App.openSession(${s.session_id})}">
-                            <div class="flex-1 min-w-0">
-                                <div class="sess-title font-mono"><span class="text-text-tertiary text-2xs mr-1">${langTag}</span>${this._esc(s.submission_label)}</div>
-                                <div class="sess-meta font-mono">${this._fmtDate(s.created_at)}</div>
-                            </div>
-                            <div class="flex items-center gap-1.5">
-                                <span class="font-mono text-2xs font-semibold ${statusCls}">${statusTag}</span>
-                                <button class="sess-delete-btn" onclick="App.deleteSession(${s.session_id}, event)" title="Delete session" aria-label="Delete session">&times;</button>
-                            </div>
+                    let statusBadge = '';
+                    if (s.status === 'complete') {
+                        const scoreVal = (s.final_score !== undefined && s.final_score !== null) ? Number(s.final_score) :
+                                         (s.analysis && s.analysis.final_score !== undefined) ? Number(s.analysis.final_score) : null;
+                        if (scoreVal !== null) {
+                            const score = Math.round(scoreVal);
+                            const scoreCol = score >= 80 ? 'text-[#2cbb5d]' : (score >= 60 ? 'text-[#f59e0b]' : 'text-[#f43f5e]');
+                            statusBadge = `<span class="vsc-score-badge ${scoreCol}" title="Verdict Score: ${score}/100">${score}</span>`;
+                        } else {
+                            statusBadge = `<span class="vsc-status-badge text-[#2cbb5d]" title="Completed">✓</span>`;
+                        }
+                    } else if (s.status.includes('failed')) {
+                        statusBadge = `<span class="vsc-status-badge text-[#f43f5e]" title="Failed">✗</span>`;
+                    } else if (s.status === 'draft') {
+                        statusBadge = `<span class="vsc-status-badge text-text-tertiary" title="Draft">•</span>`;
+                    } else {
+                        statusBadge = `<span class="vsc-status-badge text-[#f59e0b] animate-pulse" title="Evaluating">⋯</span>`;
+                    }
+
+                    const label = s.submission_label || `Attempt #${s.session_id}`;
+                    sessionsHtml += `
+                        <div class="vsc-session-item sess-item group ${isActive ? 'active' : ''}" data-session-id="${s.session_id}" role="button" tabindex="0" aria-label="Open session ${this._esc(label)}" onclick="App.openSession(${s.session_id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();App.openSession(${s.session_id})}">
+                            <span class="vsc-file-icon ${langClass}" title="${s.language}">${langShort}</span>
+                            <span class="vsc-session-label truncate" title="${this._esc(label)}">${this._esc(label)}</span>
+                            ${statusBadge}
+                            <button class="vsc-delete-btn" onclick="App.deleteSession(${s.session_id}, event)" title="Delete session" aria-label="Delete session">&times;</button>
                         </div>`;
                 }
+
+                html += `
+                    <div class="vsc-problem-accordion ${isCollapsed ? 'is-collapsed' : ''}" data-problem-id="${problemId}">
+                        <div class="vsc-accordion-header group" onclick="App.toggleProblemAccordion('${problemId}')" role="button" tabindex="0" aria-expanded="${!isCollapsed}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();App.toggleProblemAccordion('${problemId}')}">
+                            <svg class="vsc-chevron ${isCollapsed ? '' : 'rotate-90'}" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                            <svg class="vsc-folder-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                            <span class="vsc-problem-title font-mono truncate" title="${this._esc(problemTitle)}">${problemId ? `${problemId}. ` : ''}${this._esc(problemTitle)}</span>
+                            <span class="vsc-diff-dot vsc-diff-${diff}" title="${this._esc(problemObj.difficulty || 'Medium')}"></span>
+                            <button class="vsc-action-btn" onclick="App.newSessionForProblem('${problemId}', event)" title="New Attempt for ${this._esc(problemTitle)}" aria-label="New Attempt">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            </button>
+                            <span class="vsc-count-badge">${problemSessions.length}</span>
+                        </div>
+                        <div class="vsc-session-tree ${isCollapsed ? 'hidden' : ''}">
+                            ${sessionsHtml}
+                        </div>
+                    </div>`;
             }
+
             sessionList.innerHTML = html || `
                 <div class="flex flex-col items-center justify-center px-6 py-12 text-center">
                     <p class="text-text-secondary text-[13px] font-medium mb-1">No matching sessions</p>
@@ -291,10 +501,17 @@ const App = {
     },
 
     async openSession(sessionId) {
-        this.switchView('evaluation');
         this._currentSessionId = sessionId;
-        await SessionView.loadSession(sessionId);
-        document.querySelectorAll('.sess-item').forEach(el => {
+        const targetHash = `evaluation?session=${sessionId}`;
+        if (window.location.hash.replace('#', '') !== targetHash) {
+            history.replaceState(null, '', `#${targetHash}`);
+        }
+        this._handleRoute();
+        const session = await SessionView.loadSession(sessionId);
+        if (session && session.problem_id) {
+            this.expandProblemAccordion(session.problem_id);
+        }
+        document.querySelectorAll('.vsc-session-item, .sess-item').forEach(el => {
             el.classList.toggle('active', parseInt(el.dataset.sessionId, 10) === sessionId);
         });
     },
@@ -326,6 +543,24 @@ const App = {
     async filterSessions(value) {
         this._filterProblemId = value;
         await this.refreshSidebar();
+        if (value && value !== 'all') {
+            const probId = parseInt(value, 10);
+            try {
+                const sessions = await ApiClient.getSessions();
+                const matching = sessions.find(s => s.problem_id === probId);
+                if (matching) {
+                    await this.openSession(matching.session_id);
+                } else {
+                    const problem = (this._problems || []).find(p => p.problem_id === probId);
+                    const title = (problem && problem.title) ? problem.title : `Problem ${probId}`;
+                    const newSess = await ApiClient.createSession(probId, 'python', `${title} (Draft)`);
+                    await this.refreshSidebar();
+                    await this.openSession(newSess.session_id);
+                }
+            } catch (err) {
+                console.error('[APP] filterSessions direct error:', err);
+            }
+        }
     },
 
     // ── LeetCode Problem Navigation: Prev / Next / Random ──
@@ -438,7 +673,7 @@ const App = {
                         <div class="flex items-center gap-3">
                             <span class="font-mono text-xs text-text-tertiary w-6">${p.problem_id}.</span>
                             <div>
-                                <div class="font-semibold text-white text-[13.5px] hover:text-[#2cbb5d] cursor-pointer transition-colors" onclick="App.selectProblemFromCatalog(${p.problem_id})">
+                                <div class="font-semibold text-white text-[13.5px] hover:text-[#38bdf8] cursor-pointer transition-colors" onclick="App.selectProblemFromCatalog(${p.problem_id})">
                                     ${this._esc(p.title)}
                                 </div>
                                 <div class="flex items-center gap-2 mt-1">
@@ -509,17 +744,39 @@ const App = {
     },
 
     toggleSidebar() {
-        const willOpen = !document.body.classList.contains('sidebar-open');
-        document.body.classList.toggle('sidebar-open', willOpen);
-        const btn = document.querySelector('.ed-panel-toggle[onclick*="toggleSidebar"]');
-        if (btn) btn.setAttribute('aria-expanded', String(willOpen));
+        if (window.innerWidth < 1024) {
+            const willOpen = !document.body.classList.contains('sidebar-open');
+            document.body.classList.toggle('sidebar-open', willOpen);
+            const btn = document.querySelector('.ed-panel-toggle[onclick*="toggleSidebar"]');
+            if (btn) btn.setAttribute('aria-expanded', String(willOpen));
+        } else {
+            document.body.classList.toggle('sidebar-collapsed');
+            const isCollapsed = document.body.classList.contains('sidebar-collapsed');
+            localStorage.setItem('verdict_sidebar_collapsed', isCollapsed ? '1' : '0');
+            const btn = document.querySelector('.ed-panel-toggle[onclick*="toggleSidebar"]');
+            if (btn) btn.classList.toggle('opacity-50', isCollapsed);
+            if (typeof MonacoSetup !== 'undefined' && MonacoSetup.layout) {
+                setTimeout(() => MonacoSetup.layout(), 30);
+            }
+        }
     },
 
     toggleDescription() {
-        const willOpen = !document.body.classList.contains('desc-open');
-        document.body.classList.toggle('desc-open', willOpen);
-        const btn = document.querySelector('.ed-panel-toggle[onclick*="toggleDescription"]');
-        if (btn) btn.setAttribute('aria-expanded', String(willOpen));
+        if (window.innerWidth < 1280) {
+            const willOpen = !document.body.classList.contains('desc-open');
+            document.body.classList.toggle('desc-open', willOpen);
+            const btn = document.querySelector('.ed-panel-toggle[onclick*="toggleDescription"]');
+            if (btn) btn.setAttribute('aria-expanded', String(willOpen));
+        } else {
+            document.body.classList.toggle('desc-collapsed');
+            const isCollapsed = document.body.classList.contains('desc-collapsed');
+            localStorage.setItem('verdict_desc_collapsed', isCollapsed ? '1' : '0');
+            const btn = document.querySelector('.ed-panel-toggle[onclick*="toggleDescription"]');
+            if (btn) btn.classList.toggle('opacity-50', isCollapsed);
+            if (typeof MonacoSetup !== 'undefined' && MonacoSetup.layout) {
+                setTimeout(() => MonacoSetup.layout(), 30);
+            }
+        }
     },
 
     closeDrawers() {
@@ -587,21 +844,32 @@ const App = {
         }
     },
 
-    async showLeaderboard() {
+    async showLeaderboard(preferredProblemId = null) {
         this._rememberFocus();
-        document.getElementById('leaderboard-modal').classList.remove('hidden');
+        const modal = document.getElementById('leaderboard-modal');
+        if (modal) modal.classList.remove('hidden');
         this._focusModal('leaderboard-modal');
         try {
             const problems = await ApiClient.getProblems();
             const sel = document.getElementById('leaderboard-problem-select');
-            sel.innerHTML = '<option value="">Select a problem</option>';
+            if (!sel) return;
+            sel.innerHTML = '<option value="">Select a problem...</option>';
             for (const p of problems) {
                 const o = document.createElement('option');
                 o.value = p.problem_id;
-                o.textContent = `${p.title} (${p.session_count || 0})`;
+                o.textContent = `${p.title} (${p.session_count || 0} runs)`;
                 sel.appendChild(o);
             }
-        } catch (e) { console.error(e); }
+
+            // Auto-select preferred problem, active problem in SessionView, or first problem
+            const targetPid = preferredProblemId || (typeof SessionView !== 'undefined' && SessionView._currentProblemId) || (problems.length > 0 ? problems[0].problem_id : null);
+            if (targetPid) {
+                sel.value = String(targetPid);
+                Leaderboard.load(targetPid);
+            }
+        } catch (e) {
+            console.error('[APP] showLeaderboard error:', e);
+        }
     },
 
     closeLeaderboard() {

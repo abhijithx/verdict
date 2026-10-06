@@ -36,7 +36,11 @@ const SessionView = {
     },
 
     async loadSession(sessionId) {
+        this.initResizers();
         this._sessionId = sessionId;
+        this._resetRunButtons();
+        this._resetSubmitButtons();
+        this._hidePipelineRunning();
         try {
             const session = await ApiClient.getSession(sessionId);
             this._session = session;
@@ -62,10 +66,14 @@ const SessionView = {
             const langSelect = document.getElementById('lang-select');
             if (langSelect) langSelect.value = this._language;
 
-            // Set Editor Code
+            // Set Editor Code - ensure working starter code if empty or comment-only
             const editor = MonacoSetup.getEditor();
+            let initialCode = session.code || '';
+            if (this._isCodeEmpty(initialCode, this._language)) {
+                initialCode = this._getStarterCode(this._language, session.problem);
+            }
             if (editor) {
-                editor.setValue(session.code || '');
+                editor.setValue(initialCode);
             }
 
             // Load Testcases for this problem
@@ -83,7 +91,7 @@ const SessionView = {
                 const exportBtn = document.getElementById('btn-export-pdf');
                 if (exportBtn) exportBtn.classList.remove('hidden');
                 this.switchConsoleTab('analysis');
-            } else if (session.test_results && session.test_results.length > 0) {
+            } else if (session.test_results && session.test_results.length > 0 && session.test_results.some(r => r.actual_stdout !== null || r.passed)) {
                 this._renderTestResults(session.test_results);
                 this.switchConsoleTab('test-result');
             } else if (['generating_tests', 'executing', 'analyzing', 'pending'].includes(session.status)) {
@@ -96,8 +104,17 @@ const SessionView = {
                 this.switchConsoleTab('testcase');
             }
 
-            if (editor) setTimeout(() => editor.layout(), 150);
+            // Restore IDE layout mode (Code / Description / Submissions)
+            const savedLayout = localStorage.getItem('verdict_ide_layout') || 'code';
+            this.setIdeLayout(savedLayout === 'split' ? 'code' : savedLayout);
 
+            // Auto-start stopwatch timer on session load
+            if (typeof App !== 'undefined' && App.startTimer && !App._timerRunning) {
+                App.startTimer();
+            }
+
+            if (editor) setTimeout(() => editor.layout(), 150);
+            return session;
         } catch (err) {
             console.error('[SessionView] Failed to load session:', err);
             if (typeof Toast !== 'undefined') Toast.error(`Failed to load session: ${err.message}`);
@@ -125,14 +142,21 @@ const SessionView = {
             diffEl.classList.remove('hidden');
         }
 
+        const catEl = document.getElementById('lc-category');
+        if (catEl) {
+            if (problem.category) {
+                catEl.textContent = problem.category;
+                catEl.classList.remove('hidden');
+            } else {
+                catEl.classList.add('hidden');
+            }
+        }
+
         if (chipsEl) chipsEl.classList.remove('hidden');
 
         if (descEl) {
             descEl.innerHTML = this._formatLeetCodeText(problem.description || '');
         }
-
-        // Render Editorial content
-        this._renderEditorial(problem);
     },
 
     _renderEmptyProblem() {
@@ -145,75 +169,19 @@ const SessionView = {
     _formatLeetCodeText(rawText) {
         if (!rawText) return '<p class="lc-desc-placeholder">No description available.</p>';
 
-        let text = this._esc(rawText);
+        try {
+            if (typeof marked !== 'undefined' && marked.parse) {
+                return `<div class="lc-desc-body prose prose-invert max-w-none text-[#d4d4d4] text-[14px] leading-relaxed">${marked.parse(rawText)}</div>`;
+            }
+        } catch (_) {}
 
-        // Highlight inline codes: `var` -> <code>var</code>
-        text = text.replace(/`([^`]+)`/g, '<code class="bg-[#282828] text-[#9cdcfe] px-1.5 py-0.5 rounded text-[12.5px] font-mono border border-white/10">$1</code>');
-
-        // Format Example 1, Example 2 blocks
-        text = text.replace(/(Example\s+\d+:?[\s\S]*?)(?=(?:Example\s+\d+:?|Constraints:?|\n\n\n|$))/gi, (match) => {
-            const lines = match.trim().split('\n');
-            const title = lines[0];
-            const rest = lines.slice(1).join('<br>');
-            return `
-                <div class="lc-example-box">
-                    <div class="lc-example-title">${title}</div>
-                    <div class="text-[13px] leading-relaxed text-[#d4d4d4] font-mono">${rest}</div>
-                </div>
-            `;
-        });
-
-        // Format Constraints
-        text = text.replace(/Constraints:?([\s\S]*?)(?=(?:\n\n\n|$))/i, (match, body) => {
-            const items = body.split('\n').map(l => l.trim()).filter(Boolean);
-            const listHtml = items.map(it => `<li>${it.replace(/^[•\-\*]\s*/, '')}</li>`).join('');
-            return `
-                <div class="mt-5 mb-3">
-                    <div class="font-bold text-white text-[13.5px] mb-2">Constraints:</div>
-                    <ul class="lc-constraints-list">${listHtml}</ul>
-                </div>
-            `;
-        });
-
-        // Format remaining paragraphs
-        const paragraphs = text.split(/\n\s*\n/).filter(p => !p.includes('lc-example-box') && !p.includes('lc-constraints-list'));
-        if (paragraphs.length > 0) {
-            text = paragraphs.map(p => `<p class="mb-3 text-[#d4d4d4] text-[13.5px] leading-relaxed">${p}</p>`).join('');
-        }
-
-        return text;
-    },
-
-    _renderEditorial(problem) {
-        const editorialPane = document.getElementById('lc-editorial-pane');
-        if (!editorialPane) return;
-
-        const category = problem.category || 'General Algorithms';
-        const algo = category.includes('DP') ? 'Dynamic Programming (Optimal Substructure)' : (category.includes('Tree') ? 'Depth-First Search / BFS' : 'Two-Pointer / Hash Map Optimization');
-        
-        editorialPane.innerHTML = `
-            <div class="p-5 space-y-4 text-[13.5px] text-[#d4d4d4] leading-relaxed">
-                <div class="bg-[#282828] p-4 rounded-lg border border-white/10">
-                    <div class="text-xs font-mono uppercase tracking-wider text-text-tertiary mb-1">Recommended Approach</div>
-                    <div class="text-base font-semibold text-white">${algo}</div>
-                    <div class="flex items-center gap-4 mt-3 font-mono text-xs text-[#9cdcfe]">
-                        <span>Time: <strong class="text-white">O(N)</strong></span>
-                        <span>Space: <strong class="text-white">O(1)</strong></span>
-                    </div>
-                </div>
-
-                <div>
-                    <h3 class="font-semibold text-white text-[14px] mb-2">Key Strategy</h3>
-                    <p class="text-text-secondary">
-                        Instead of testing all quadratic combinations (O(N²)), track seen values or maintain two pointers to solve in a single pass.
-                    </p>
-                </div>
-
-                <div class="bg-[#1e1e1e] p-3.5 rounded border border-white/5 font-mono text-xs text-[#ce9178]">
-                    💡 <strong>Tip:</strong> Always handle edge cases where the input is empty or contains negative numbers before writing main loop logic.
-                </div>
-            </div>
-        `;
+        // Fast fallback without catastrophic regex lookaheads
+        const paragraphs = String(rawText).split(/\n\s*\n/).filter(Boolean);
+        const safe = paragraphs.map(p => {
+            const escaped = this._esc(p).replace(/\n/g, '<br>');
+            return `<p class="mb-4 text-[#d4d4d4] text-[14px] leading-relaxed">${escaped}</p>`;
+        }).join('');
+        return `<div class="lc-desc-body">${safe}</div>`;
     },
 
     async _loadProblemSubmissions(problemId) {
@@ -222,45 +190,90 @@ const SessionView = {
         if (!pane || !problemId) return;
 
         try {
-            const historyData = await ApiClient.getHistory('evaluation');
-            const items = (historyData && historyData.items ? historyData.items : []).filter(it => it.problem_id === problemId || (it.session_id && it.session_id === this._sessionId));
+            const historyData = await ApiClient.getHistory('', 'evaluation');
+            const targetPid = Number(problemId);
+            const items = (historyData && historyData.items ? historyData.items : []).filter(it => {
+                const itemPid = (it.problem_id !== undefined && it.problem_id !== null) ? Number(it.problem_id) : null;
+                const itemSid = (it.session_id !== undefined && it.session_id !== null) ? Number(it.session_id) : (it.raw_id ? Number(it.raw_id) : null);
+                return (itemPid !== null && itemPid === targetPid) || (this._sessionId && itemSid === Number(this._sessionId));
+            });
             
             if (badge) badge.textContent = String(items.length);
 
             if (items.length === 0) {
                 pane.innerHTML = `
-                    <div class="p-8 text-center text-text-tertiary text-xs">
-                        No submissions recorded for this problem yet. Submit your code to see history.
+                    <div class="h-full flex flex-col items-center justify-center p-12 text-center text-text-tertiary">
+                        <div class="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-xl mb-3">📑</div>
+                        <h3 class="text-sm font-semibold text-white mb-1 font-mono">No Verdict Submissions Yet</h3>
+                        <p class="text-xs text-text-tertiary max-w-sm leading-relaxed mb-4">
+                            No evaluations have been recorded for this problem yet. Click <strong class="text-[#007acc]">Analyze</strong> to run evaluation and record your history.
+                        </p>
+                        <button class="lc-run-btn !h-8 !px-4 text-xs" onclick="SessionView.setIdeLayout('code')">
+                            ← Back to Code Editor
+                        </button>
                     </div>`;
                 return;
             }
 
-            let html = '<div class="p-4 space-y-2.5">';
+            let html = `
+                <div class="p-6 max-w-4xl mx-auto space-y-4">
+                    <div class="flex items-center justify-between pb-3 border-b border-white/10">
+                        <div>
+                            <h2 class="text-sm font-bold text-white font-mono flex items-center gap-2">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                                Past Verdict Submissions
+                            </h2>
+                            <p class="text-2xs text-text-tertiary mt-0.5">Click any submission to view its code, test cases, and verdict scores.</p>
+                        </div>
+                        <span class="text-2xs font-mono bg-white/5 border border-white/10 px-2.5 py-1 rounded text-text-secondary">${items.length} recorded</span>
+                    </div>
+                    <div class="space-y-2.5">
+            `;
             for (const item of items) {
-                const isAccepted = item.status === 'complete' && (item.score >= 70);
-                const statusColor = isAccepted ? 'text-[#2cbb5d]' : (item.status === 'complete' ? 'text-[#f59e0b]' : 'text-[#f43f5e]');
-                const statusLabel = isAccepted ? 'Accepted' : (item.status === 'complete' ? 'Completed' : 'Wrong Answer / Error');
-                const score = item.score !== undefined ? `${item.score}/100` : '--';
-                const date = item.created_at ? new Date(item.created_at).toLocaleDateString(undefined, { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }) : '';
-                const sessId = item.session_id || (item.id ? String(item.id).replace('eval_', '') : '');
+                const scoreVal = (item.score !== undefined && item.score !== null) ? Number(item.score) : 
+                                 (item.final_score !== undefined && item.final_score !== null) ? Number(item.final_score) : null;
+                const verdictStr = (item.verdict || '').toUpperCase();
+                const isAccepted = (scoreVal !== null && scoreVal >= 70) || ['OPTIMAL', 'ACCEPTABLE', 'ACCEPTED'].includes(verdictStr);
+                const isError = item.status === 'failed' || ['DEFICIENT', 'WRONG ANSWER', 'ERROR', 'RUNTIME ERROR'].includes(verdictStr);
+                
+                const statusColor = isAccepted ? 'text-[#2cbb5d]' : (isError ? 'text-[#f43f5e]' : 'text-[#f59e0b]');
+                const statusLabel = item.verdict ? item.verdict : (isAccepted ? 'Accepted' : (item.status === 'complete' ? 'Completed' : 'In Progress'));
+                const scoreDisplay = scoreVal !== null ? `${Math.round(scoreVal)}/100` : (item.status === 'complete' ? 'Done' : '--');
+                const date = item.created_at || item.timestamp ? new Date(item.created_at || item.timestamp).toLocaleDateString(undefined, { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }) : '';
+                const sessId = item.session_id || (item.raw_id ? Number(item.raw_id) : (item.id ? String(item.id).replace('eval_', '') : ''));
 
                 html += `
-                    <div class="bg-[#282828] p-3.5 rounded-lg border border-white/5 flex items-center justify-between hover:border-white/20 transition-all cursor-pointer" onclick="App.openSession(${sessId})">
-                        <div>
-                            <div class="flex items-center gap-2">
-                                <span class="font-semibold text-[13px] ${statusColor}">${statusLabel}</span>
-                                <span class="text-xs font-mono text-text-tertiary bg-white/5 px-2 py-0.5 rounded uppercase">${item.language || 'python'}</span>
+                    <div class="bg-[#282828] hover:bg-[#303030] p-4 rounded-xl border border-white/5 flex items-center justify-between hover:border-[#007acc]/50 transition-all cursor-pointer shadow-sm group" onclick="App.openSession(${sessId})">
+                        <div class="flex items-center gap-3.5">
+                            <div class="w-8 h-8 rounded-lg ${isAccepted ? 'bg-[#2cbb5d]/10 text-[#2cbb5d] border border-[#2cbb5d]/25' : (isError ? 'bg-[#f43f5e]/10 text-[#f43f5e] border border-[#f43f5e]/25' : 'bg-[#f59e0b]/10 text-[#f59e0b] border border-[#f59e0b]/25')} flex items-center justify-center font-bold text-xs shrink-0">
+                                ${isAccepted ? '✓' : (isError ? '✗' : '!')}
                             </div>
-                            <div class="text-2xs font-mono text-text-tertiary mt-1">${date}</div>
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <span class="font-bold text-[13.5px] ${statusColor}">${statusLabel}</span>
+                                    <span class="text-2xs font-mono text-text-tertiary bg-white/5 px-2 py-0.5 rounded uppercase border border-white/5">${item.language || 'python'}</span>
+                                    ${item.session_id ? `<span class="text-2xs font-mono text-text-tertiary">#${item.session_id}</span>` : ''}
+                                </div>
+                                <div class="text-2xs font-mono text-text-tertiary mt-1 flex items-center gap-1.5">
+                                    <span>${date}</span>
+                                    ${item.complexity && item.complexity !== 'N/A' ? `<span class="text-text-tertiary/60">·</span><span class="text-[#9cdcfe]">${this._esc(item.complexity)}</span>` : ''}
+                                </div>
+                            </div>
                         </div>
-                        <div class="text-right">
-                            <div class="font-bold text-[14px] text-white font-mono">${score}</div>
-                            <div class="text-2xs text-text-tertiary">Score</div>
+                        <div class="flex items-center gap-4">
+                            <div class="text-right">
+                                <div class="font-bold text-[15px] ${scoreVal !== null && scoreVal >= 70 ? 'text-[#2cbb5d]' : 'text-white'} font-mono">${scoreDisplay}</div>
+                                <div class="text-2xs text-text-tertiary group-hover:text-[#38bdf8] transition-colors">Verdict Score →</div>
+                            </div>
+                            <span class="text-xs text-text-tertiary group-hover:text-white transition-colors">›</span>
                         </div>
                     </div>
                 `;
             }
-            html += '</div>';
+            html += `
+                    </div>
+                </div>
+            `;
             pane.innerHTML = html;
         } catch (e) {
             console.error('[SessionView] Could not load submissions history:', e);
@@ -339,7 +352,7 @@ const SessionView = {
     },
 
     _renderTestResults(testResults, selectedIdx = 0) {
-        const testResultPanel = document.getElementById('panel-test-results');
+        const testResultPanel = document.getElementById('panel-test-results') || document.getElementById('panel-test-result');
         if (!testResultPanel || !testResults || testResults.length === 0) return;
 
         this._lastTestResults = testResults;
@@ -377,9 +390,9 @@ const SessionView = {
                         <span class="lc-stat-pill">⏱ Case Runtime: <strong class="text-white">${timeMs} ms</strong></span>
                         <span class="lc-stat-pill">Status: <strong class="${isCasePass ? 'text-[#2cbb5d]' : 'text-[#f43f5e]'}">${isCasePass ? '✓ Passed' : '✗ Failed'}</strong></span>
                         ${isAllPassed ? `
-                            <button class="lc-submit-btn !h-7 !px-3 text-xs" onclick="SessionView.submit()" title="Testcases passed! Submit for full AI verdict">
-                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
-                                Submit for AI Verdict
+                            <button class="lc-submit-btn !h-7 !px-3 text-xs" onclick="SessionView.submit()" title="Testcases passed! Run full AI verdict analysis">
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                                Run Full AI Analysis
                             </button>
                         ` : ''}
                     </div>
@@ -403,11 +416,11 @@ const SessionView = {
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
                         <div class="text-xs font-mono text-text-tertiary mb-1">Expected Output:</div>
-                        <pre class="bg-[#1e1e1e] p-2.5 rounded text-xs font-mono text-[#d4d4d4] whitespace-pre-wrap border border-white/5">${this._esc(currentTc.expected_stdout || '(empty)')}</pre>
+                        <pre class="bg-[#1e1e1e] p-2.5 rounded text-xs font-mono text-[#d4d4d4] whitespace-pre-wrap border border-white/5">${this._esc((currentTc.expected_stdout !== undefined && currentTc.expected_stdout !== null && currentTc.expected_stdout !== '') ? currentTc.expected_stdout : '(empty)')}</pre>
                     </div>
                     <div>
                         <div class="text-xs font-mono text-text-tertiary mb-1">Your Output:</div>
-                        <pre class="bg-[#1e1e1e] p-2.5 rounded text-xs font-mono ${isCasePass ? 'text-[#2cbb5d]' : 'text-[#f43f5e]'} whitespace-pre-wrap border ${isCasePass ? 'border-white/5' : 'border-[#f43f5e]/20'}">${this._esc(currentTc.actual_stdout || (currentTc.stderr ? 'Execution error' : '(no output)'))}</pre>
+                        <pre class="bg-[#1e1e1e] p-2.5 rounded text-xs font-mono ${isCasePass ? 'text-[#2cbb5d]' : 'text-[#f43f5e]'} whitespace-pre-wrap border ${isCasePass ? 'border-white/5' : 'border-[#f43f5e]/20'}">${this._esc((currentTc.actual_stdout !== undefined && currentTc.actual_stdout !== null && currentTc.actual_stdout !== '') ? currentTc.actual_stdout : (currentTc.stderr ? 'Execution error' : '(no output)'))}</pre>
                     </div>
                 </div>
 
@@ -420,7 +433,7 @@ const SessionView = {
 
                 ${!isAllPassed ? `
                     <div class="p-3 bg-[#f43f5e]/10 border border-[#f43f5e]/20 rounded-lg text-xs text-[#f43f5e] font-mono flex items-center justify-between">
-                        <span>⚠️ Code execution failed on test cases. Fix issues above and click <strong>Run</strong> to verify before submitting for analysis.</span>
+                        <span>⚠️ Code execution failed on test cases. Fix issues above and click <strong>Run</strong> to verify before submitting.</span>
                         <button class="lc-run-btn !h-7 !px-3 text-xs shrink-0 ml-3" onclick="SessionView.dryRun()">
                             <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg> Re-Run
                         </button>
@@ -454,10 +467,16 @@ const SessionView = {
         cases.forEach((tc, idx) => {
             const isActive = idx === this._selectedTestCaseIndex;
             const canRemove = cases.length > 1 && idx > 0;
+            const isPass = tc.passed === true;
+            const isFail = tc.passed === false;
+            let statusDot = '';
+            if (isPass) statusDot = '<span class="w-1.5 h-1.5 rounded-full bg-[#2cbb5d] mr-1.5 inline-block"></span>';
+            else if (isFail) statusDot = '<span class="w-1.5 h-1.5 rounded-full bg-[#f43f5e] mr-1.5 inline-block"></span>';
+
             tabsHtml += `
                 <div class="relative inline-flex items-center">
                     <button class="lc-case-tab ${isActive ? 'active' : ''} ${canRemove ? '!pr-6' : ''}" onclick="SessionView.selectTestCase(${idx})">
-                        Case ${idx + 1}
+                        ${statusDot}Case ${idx + 1}
                     </button>
                     ${canRemove ? `
                         <button class="absolute right-1 text-xs text-text-tertiary hover:text-[#f43f5e] px-1 py-0.5" onclick="event.stopPropagation(); SessionView.removeTestCase(${idx})" title="Remove Case ${idx + 1}">
@@ -552,34 +571,144 @@ const SessionView = {
         return (currentTc && currentTc.stdin) ? currentTc.stdin : '';
     },
 
-    // ── Navigation Tabs in Left Problem Panel ──
-    switchDescTab(tab) {
-        const tabs = ['desc', 'editorial', 'submissions'];
-        tabs.forEach(t => {
-            const btn = document.getElementById(`tab-lc-${t}`);
-            const pane = document.getElementById(`lc-${t}-pane`);
-            const isActive = t === tab;
-            if (btn) btn.classList.toggle('active', isActive);
-            if (pane) pane.classList.toggle('hidden', !isActive);
+    _syncCurrentTestCaseFromDom() {
+        if (this._testCases && this._testCases[this._selectedTestCaseIndex]) {
+            const inputArea = document.getElementById('lc-case-stdin');
+            const outputArea = document.getElementById('lc-case-stdout');
+            if (inputArea && inputArea.value !== undefined) {
+                this._testCases[this._selectedTestCaseIndex].stdin = inputArea.value;
+            }
+            if (outputArea && outputArea.value !== undefined) {
+                this._testCases[this._selectedTestCaseIndex].expected_stdout = outputArea.value;
+            }
+        }
+    },
+
+    // ── Main IDE View Switcher (Code, Description, Submissions) ──
+    setIdeLayout(mode) {
+        if (!mode || mode === 'split') mode = 'code';
+        this._currentLayoutMode = mode;
+        const codePane = document.getElementById('code-workspace-pane');
+        const descPanel = document.getElementById('desc-panel');
+        const subPane = document.getElementById('lc-submissions-pane');
+        const editorContainer = document.getElementById('editor-container');
+        const bottomPanel = document.getElementById('bottom-panel');
+
+        // Update switcher active states
+        document.querySelectorAll('.ide-switch-btn').forEach(btn => {
+            const btnMode = btn.id.replace('switch-tab-', '');
+            btn.classList.toggle('active', btnMode === mode);
         });
+
+        if (mode === 'code') {
+            // Full width Code Editor + Console drawer
+            if (codePane) {
+                codePane.style.display = 'flex';
+                codePane.classList.remove('hidden');
+            }
+            if (editorContainer) editorContainer.style.display = 'block';
+            if (bottomPanel) bottomPanel.style.display = 'flex';
+            if (descPanel) {
+                descPanel.style.display = 'none';
+                descPanel.classList.add('hidden');
+            }
+            if (subPane) {
+                subPane.style.display = 'none';
+                subPane.classList.add('hidden');
+            }
+        } else if (mode === 'desc') {
+            // Full width Problem Description
+            if (codePane) {
+                codePane.style.display = 'none';
+                codePane.classList.add('hidden');
+            }
+            if (descPanel) {
+                descPanel.style.display = 'flex';
+                descPanel.classList.remove('hidden');
+                descPanel.style.width = '100%';
+            }
+            if (subPane) {
+                subPane.style.display = 'none';
+                subPane.classList.add('hidden');
+            }
+        } else if (mode === 'history') {
+            // Full width Submissions & Analysis History
+            if (codePane) {
+                codePane.style.display = 'none';
+                codePane.classList.add('hidden');
+            }
+            if (descPanel) {
+                descPanel.style.display = 'none';
+                descPanel.classList.add('hidden');
+            }
+            if (subPane) {
+                subPane.style.display = 'block';
+                subPane.classList.remove('hidden');
+                subPane.style.width = '100%';
+            }
+
+            if (this._currentProblemId) {
+                this._loadProblemSubmissions(this._currentProblemId);
+            }
+        }
+
+        localStorage.setItem('verdict_ide_layout', mode);
+
+        if (mode === 'code' && typeof MonacoSetup !== 'undefined' && MonacoSetup.layout) {
+            setTimeout(() => MonacoSetup.layout(), 30);
+            setTimeout(() => MonacoSetup.layout(), 120);
+        }
+    },
+
+    // ── Navigation Tabs helper (Backward Compatibility) ──
+    switchDescTab(tab) {
+        if (tab === 'desc') {
+            this.setIdeLayout('desc');
+        } else if (tab === 'submissions' || tab === 'history') {
+            this.setIdeLayout('history');
+        } else {
+            this.setIdeLayout('code');
+        }
     },
 
     // ── Navigation Tabs in Right Console Drawer ──
     switchConsoleTab(tab) {
-        const tabs = ['testcase', 'test-result', 'analysis', 'output'];
-        tabs.forEach(t => {
-            const btn = document.querySelector(`.btm-tab[data-panel="${t}"]`);
-            const panel = document.getElementById(`panel-${t}`);
-            const isActive = t === tab;
-            if (btn) {
-                btn.classList.toggle('active', isActive);
-                btn.setAttribute('aria-selected', String(isActive));
-            }
+        const tabMap = {
+            'testcase': 'panel-testcase',
+            'test-result': 'panel-test-results',
+            'test-results': 'panel-test-results',
+            'analysis': 'panel-analysis',
+            'output': 'panel-output',
+        };
+        const targetPanelId = tabMap[tab] || `panel-${tab}`;
+
+        // Update tab buttons
+        document.querySelectorAll('.btm-tab').forEach(btn => {
+            const p = btn.dataset.panel;
+            const btnTarget = tabMap[p] || `panel-${p}`;
+            const isActive = (btnTarget === targetPanelId);
+            btn.classList.toggle('active', isActive);
+            btn.setAttribute('aria-selected', String(isActive));
+        });
+
+        // Update panels
+        const panelIds = ['panel-testcase', 'panel-test-results', 'panel-test-result', 'panel-analysis', 'panel-output'];
+        panelIds.forEach(id => {
+            const panel = document.getElementById(id);
             if (panel) {
-                panel.classList.toggle('active', isActive);
-                panel.classList.toggle('hidden', !isActive);
+                const isMatch = (id === targetPanelId) || (id.startsWith('panel-test-result') && targetPanelId.startsWith('panel-test-result'));
+                panel.classList.toggle('active', isMatch);
+                panel.classList.toggle('hidden', !isMatch);
             }
         });
+
+        // If switching to test results and we have cached results, re-render if panel is unpopulated
+        if (targetPanelId === 'panel-test-results' && this._lastTestResults && this._lastTestResults.length > 0) {
+            const pEl = document.getElementById('panel-test-results') || document.getElementById('panel-test-result');
+            if (pEl && !pEl.querySelector('.lc-case-tab')) {
+                this._renderTestResults(this._lastTestResults, this._selectedResultIdx || 0);
+            }
+        }
 
         // Auto-expand console if currently collapsed
         const bottomPanel = document.getElementById('bottom-panel');
@@ -591,6 +720,22 @@ const SessionView = {
             if (typeof MonacoSetup !== 'undefined' && MonacoSetup.layout) {
                 setTimeout(() => MonacoSetup.layout(), 100);
             }
+        }
+    },
+
+    _ensureConsoleOpen() {
+        const bottomPanel = document.getElementById('bottom-panel');
+        const chevron = document.getElementById('console-chevron');
+        this._consoleOpen = true;
+        if (bottomPanel) {
+            bottomPanel.style.display = 'flex';
+            const targetHeight = this._consoleHeight || '280px';
+            const parsed = parseInt(targetHeight, 10);
+            bottomPanel.style.height = (isNaN(parsed) || parsed < 160) ? '280px' : targetHeight;
+        }
+        if (chevron) chevron.textContent = '▾';
+        if (typeof MonacoSetup !== 'undefined' && MonacoSetup.layout) {
+            setTimeout(() => MonacoSetup.layout(), 100);
         }
     },
 
@@ -633,98 +778,173 @@ const SessionView = {
     },
 
     initResizers() {
-        // Vertical resizer (problem description vs center editor)
-        const descPanel = document.getElementById('desc-panel');
-        const descResizer = document.getElementById('desc-resizer');
-        if (descPanel && descResizer && !this._descResizerInit) {
-            this._descResizerInit = true;
+        if (this._resizersInitialized) return;
+        this._resizersInitialized = true;
 
-            const savedWidth = localStorage.getItem('verdict_desc_width');
-            if (savedWidth) {
-                descPanel.style.width = savedWidth;
-                descPanel.style.maxWidth = 'none';
-            }
-
-            let isDragging = false;
-            let startX = 0;
-            let startWidth = 0;
-
-            descResizer.addEventListener('mousedown', (e) => {
-                isDragging = true;
-                startX = e.clientX;
-                startWidth = descPanel.getBoundingClientRect().width;
-                descResizer.classList.add('dragging');
-                document.body.style.cursor = 'col-resize';
-                document.body.style.userSelect = 'none';
-                e.preventDefault();
-            });
-
-            descResizer.addEventListener('dblclick', () => {
-                descPanel.style.width = '42%';
-                descPanel.style.maxWidth = '560px';
-                localStorage.removeItem('verdict_desc_width');
-                if (typeof MonacoSetup !== 'undefined' && MonacoSetup.layout) MonacoSetup.layout();
-            });
-
-            window.addEventListener('mousemove', (e) => {
-                if (!isDragging) return;
-                const delta = e.clientX - startX;
-                const newWidth = Math.max(280, Math.min(window.innerWidth * 0.7, startWidth + delta));
-                descPanel.style.width = `${newWidth}px`;
-                descPanel.style.maxWidth = 'none';
-                if (typeof MonacoSetup !== 'undefined' && MonacoSetup.layout) MonacoSetup.layout();
-            });
-
-            window.addEventListener('mouseup', () => {
-                if (isDragging) {
-                    isDragging = false;
-                    descResizer.classList.remove('dragging');
-                    document.body.style.cursor = '';
-                    document.body.style.userSelect = '';
-                    localStorage.setItem('verdict_desc_width', `${descPanel.getBoundingClientRect().width}px`);
-                    if (typeof MonacoSetup !== 'undefined' && MonacoSetup.layout) MonacoSetup.layout();
-                }
-            });
-        }
-
-        // Horizontal resizer (bottom console drawer)
+        const sidebar = document.getElementById('sidebar');
+        const sidebarResizer = document.getElementById('sidebar-resizer');
         const bottomPanel = document.getElementById('bottom-panel');
         const consoleResizer = document.getElementById('console-resizer');
-        if (bottomPanel && consoleResizer && !this._consoleResizerInit) {
-            this._consoleResizerInit = true;
 
-            const savedHeight = localStorage.getItem('verdict_console_height');
-            if (savedHeight) {
-                this._consoleHeight = savedHeight;
-                bottomPanel.style.height = savedHeight;
+        // Restore saved dimensions
+        if (sidebar) {
+            const savedSidebarWidth = localStorage.getItem('verdict_sidebar_width');
+            if (savedSidebarWidth && window.innerWidth >= 1024) {
+                sidebar.style.width = savedSidebarWidth;
+            }
+        }
+        if (bottomPanel) {
+            const savedConsoleHeight = localStorage.getItem('verdict_console_height');
+            if (savedConsoleHeight) {
+                this._consoleHeight = savedConsoleHeight;
+                bottomPanel.style.height = savedConsoleHeight;
             } else {
                 this._consoleHeight = '280px';
             }
+        }
+
+        // Generic Pointer Capture Splitter Binder
+        const bindSplitter = ({ resizer, target, direction, min, max, storageKey, defaultVal, onResize, onToggle }) => {
+            if (!resizer || !target) return;
 
             let isDragging = false;
-            let startY = 0;
-            let startHeight = 0;
+            let startCoord = 0;
+            let startDim = 0;
+            let rafId = null;
 
-            consoleResizer.addEventListener('mousedown', (e) => {
-                isDragging = true;
-                startY = e.clientY;
-                startHeight = bottomPanel.getBoundingClientRect().height;
-                consoleResizer.classList.add('dragging');
-                document.body.style.cursor = 'row-resize';
-                document.body.style.userSelect = 'none';
-                e.preventDefault();
-            });
-
-            consoleResizer.addEventListener('dblclick', () => {
-                SessionView.toggleConsole();
-            });
-
-            window.addEventListener('mousemove', (e) => {
+            const onMove = (e) => {
                 if (!isDragging) return;
-                const delta = startY - e.clientY;
-                const newHeight = Math.max(40, Math.min(window.innerHeight * 0.85, startHeight + delta));
-                bottomPanel.style.height = `${newHeight}px`;
+                e.preventDefault();
 
+                if (rafId) cancelAnimationFrame(rafId);
+                rafId = requestAnimationFrame(() => {
+                    let newDim;
+                    const maxBound = typeof max === 'function' ? max() : max;
+
+                    if (direction === 'horizontal') {
+                        const delta = e.clientX - startCoord;
+                        newDim = Math.max(min, Math.min(maxBound, startDim + delta));
+                        target.style.width = `${newDim}px`;
+                        target.style.maxWidth = 'none';
+                    } else {
+                        // console resizer: dragging up increases height
+                        const delta = startCoord - e.clientY;
+                        newDim = Math.max(min, Math.min(maxBound, startDim + delta));
+                        target.style.height = `${newDim}px`;
+                    }
+
+                    if (onResize) onResize(newDim);
+                    if (typeof MonacoSetup !== 'undefined' && MonacoSetup.layout) {
+                        MonacoSetup.layout();
+                    }
+                });
+            };
+
+            const endDrag = (e) => {
+                if (!isDragging) return;
+                isDragging = false;
+                if (rafId) cancelAnimationFrame(rafId);
+
+                window.removeEventListener('pointermove', onMove);
+                window.removeEventListener('pointerup', endDrag);
+                window.removeEventListener('pointercancel', endDrag);
+                resizer.removeEventListener('pointermove', onMove);
+                resizer.removeEventListener('pointerup', endDrag);
+                resizer.removeEventListener('pointercancel', endDrag);
+
+                try {
+                    if (e && e.pointerId !== undefined && resizer.hasPointerCapture && resizer.hasPointerCapture(e.pointerId)) {
+                        resizer.releasePointerCapture(e.pointerId);
+                    }
+                } catch (_) {}
+
+                document.body.classList.remove('is-resizing', 'is-resizing-v', 'is-resizing-h');
+                resizer.classList.remove('dragging');
+                target.style.transition = '';
+
+                const finalDim = direction === 'horizontal'
+                    ? target.getBoundingClientRect().width
+                    : target.getBoundingClientRect().height;
+
+                if (storageKey && finalDim > (direction === 'horizontal' ? 100 : 45)) {
+                    localStorage.setItem(storageKey, `${Math.round(finalDim)}px`);
+                }
+
+                if (typeof MonacoSetup !== 'undefined' && MonacoSetup.layout) {
+                    MonacoSetup.layout();
+                }
+            };
+
+            resizer.addEventListener('pointerdown', (e) => {
+                if (e.button !== 0) return; // Only primary button
+                e.preventDefault();
+                try {
+                    if (e.pointerId !== undefined && resizer.setPointerCapture) {
+                        resizer.setPointerCapture(e.pointerId);
+                    }
+                } catch (_) {}
+
+                isDragging = true;
+                startCoord = direction === 'horizontal' ? e.clientX : e.clientY;
+                startDim = direction === 'horizontal'
+                    ? target.getBoundingClientRect().width
+                    : target.getBoundingClientRect().height;
+
+                document.body.classList.add('is-resizing');
+                document.body.classList.add(direction === 'horizontal' ? 'is-resizing-v' : 'is-resizing-h');
+                resizer.classList.add('dragging');
+                target.style.transition = 'none';
+
+                window.addEventListener('pointermove', onMove, { passive: false });
+                window.addEventListener('pointerup', endDrag);
+                window.addEventListener('pointercancel', endDrag);
+                resizer.addEventListener('pointermove', onMove, { passive: false });
+                resizer.addEventListener('pointerup', endDrag);
+                resizer.addEventListener('pointercancel', endDrag);
+            });
+
+            resizer.addEventListener('lostpointercapture', endDrag);
+
+            resizer.addEventListener('dblclick', (e) => {
+                e.preventDefault();
+                if (onToggle) {
+                    onToggle();
+                } else if (defaultVal) {
+                    if (direction === 'horizontal') {
+                        target.style.width = defaultVal;
+                        target.style.maxWidth = '';
+                    } else {
+                        target.style.height = defaultVal;
+                    }
+                    if (storageKey) localStorage.removeItem(storageKey);
+                    if (typeof MonacoSetup !== 'undefined' && MonacoSetup.layout) {
+                        setTimeout(() => MonacoSetup.layout(), 30);
+                    }
+                }
+            });
+        };
+
+        // 1. Sidebar Resizer
+        bindSplitter({
+            resizer: sidebarResizer,
+            target: sidebar,
+            direction: 'horizontal',
+            min: 200,
+            max: () => Math.min(500, window.innerWidth * 0.4),
+            storageKey: 'verdict_sidebar_width',
+            defaultVal: '280px',
+        });
+
+        // 2. Bottom Console Drawer Resizer
+        bindSplitter({
+            resizer: consoleResizer,
+            target: bottomPanel,
+            direction: 'vertical',
+            min: 40,
+            max: () => window.innerHeight * 0.85,
+            storageKey: 'verdict_console_height',
+            defaultVal: '280px',
+            onResize: (newHeight) => {
                 const chevron = document.getElementById('console-chevron');
                 if (newHeight <= 45) {
                     SessionView._consoleOpen = false;
@@ -734,73 +954,210 @@ const SessionView = {
                     if (chevron) chevron.textContent = '▾';
                     SessionView._consoleHeight = `${newHeight}px`;
                 }
-                if (typeof MonacoSetup !== 'undefined' && MonacoSetup.layout) MonacoSetup.layout();
-            });
-
-            window.addEventListener('mouseup', () => {
-                if (isDragging) {
-                    isDragging = false;
-                    consoleResizer.classList.remove('dragging');
-                    document.body.style.cursor = '';
-                    document.body.style.userSelect = '';
-                    const finalH = bottomPanel.getBoundingClientRect().height;
-                    if (finalH > 45) {
-                        localStorage.setItem('verdict_console_height', `${finalH}px`);
-                        SessionView._consoleHeight = `${finalH}px`;
-                    }
-                    if (typeof MonacoSetup !== 'undefined' && MonacoSetup.layout) MonacoSetup.layout();
-                }
-            });
-        }
+            },
+            onToggle: () => {
+                SessionView.toggleConsole();
+            },
+        });
     },
 
-    toggleTopics() {
-        if (typeof Toast !== 'undefined') Toast.info('Topics: Array, Hash Table, Dynamic Programming, Two Pointers');
-    },
 
-    toggleCompanies() {
-        if (typeof Toast !== 'undefined') Toast.info('Top Companies: Google, Amazon, Meta, Microsoft, Apple, Uber');
-    },
-
-    toggleHints() {
-        const hintEl = document.getElementById('lc-hints-container');
-        if (hintEl) hintEl.classList.toggle('hidden');
-    },
 
     getEditorCode() {
         return MonacoSetup.getCode() || (window.monacoEditor ? window.monacoEditor.getValue() : '');
     },
 
     _getAllRunBtns() {
-        return [
-            document.getElementById('btn-dry-run'),
-            document.getElementById('top-btn-run'),
-            document.getElementById('btn-console-run'),
-            document.getElementById('btn-panel-run')
-        ].filter(Boolean);
+        return Array.from(document.querySelectorAll('#ed-btn-run, button[onclick*="dryRun()"]'));
     },
 
     _getAllSubmitBtns() {
-        return [
-            document.getElementById('btn-submit'),
-            document.getElementById('top-btn-submit'),
-            document.getElementById('btn-console-submit'),
-            document.getElementById('btn-panel-submit')
-        ].filter(Boolean);
+        return Array.from(document.querySelectorAll('#ed-btn-submit, button[onclick*="SessionView.submit()"]'));
     },
 
     _resetRunButtons() {
         this._getAllRunBtns().forEach(b => {
             b.disabled = false;
-            b.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg> <span>Run</span>`;
+            if (b.dataset.idleHtml) {
+                b.innerHTML = b.dataset.idleHtml;
+            } else {
+                b.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg> <span>Run</span>`;
+            }
         });
     },
 
     _resetSubmitButtons() {
         this._getAllSubmitBtns().forEach(b => {
             b.disabled = false;
-            b.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> <span>Submit</span>`;
+            if (b.dataset.idleHtml) {
+                b.innerHTML = b.dataset.idleHtml;
+            } else {
+                b.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> <span>Submit</span>`;
+            }
         });
+    },
+
+    _isCodeEmpty(rawCode, language = 'python') {
+        if (!rawCode || !rawCode.trim()) return true;
+
+        let stripped = rawCode;
+        const lang = (language || this._language || 'python').toLowerCase();
+
+        if (lang === 'python') {
+            stripped = stripped.replace(/'''[\s\S]*?'''/g, '').replace(/"""[\s\S]*?"""/g, '');
+            stripped = stripped.replace(/#.*$/gm, '');
+        } else {
+            stripped = stripped.replace(/\/\*[\s\S]*?\*\//g, '');
+            stripped = stripped.replace(/\/\/.*$/gm, '');
+        }
+
+        return stripped.trim().length === 0;
+    },
+
+    _renderNoCodeError() {
+        const testResultPanel = document.getElementById('panel-test-results') || document.getElementById('panel-test-result');
+        if (!testResultPanel) return;
+
+        testResultPanel.innerHTML = `
+            <div class="p-4 space-y-4">
+                <div class="lc-verdict-banner flex items-center justify-between">
+                    <div>
+                        <span class="lc-verdict-title lc-verdict-fail">No Code Provided</span>
+                    </div>
+                    <span class="lc-stat-pill">Status: <strong class="text-[#f43f5e]">Empty Code</strong></span>
+                </div>
+                <div class="p-4 bg-[#f43f5e]/10 border border-[#f43f5e]/20 rounded-lg text-[13px] text-[#f43f5e] font-mono leading-relaxed space-y-3">
+                    <p>⚠️ Your editor contains only comments or whitespace. Please write your solution code before running or analyzing.</p>
+                    <div>
+                        <button class="lc-run-btn !h-8 !px-3 text-xs bg-[#007acc]/20 border border-[#007acc]/40 text-[#38bdf8] hover:bg-[#007acc]/30" onclick="SessionView.insertStarterCode()">
+                            ✨ Insert Working Starter Template
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+
+    insertStarterCode() {
+        const starter = this._getStarterCode(this._language, this._session ? this._session.problem : null);
+        const editor = MonacoSetup.getEditor();
+        if (editor) {
+            editor.setValue(starter);
+            editor.focus();
+        }
+        this._lastRunPassed = false;
+        this.switchConsoleTab('testcase');
+        if (typeof Toast !== 'undefined') Toast.success('Loaded starter template. Click Run to verify!');
+    },
+
+    _getStarterCode(language = 'python', problem = null) {
+        const lang = (language || 'python').toLowerCase();
+        const pTitle = (problem && problem.title ? problem.title : '').toLowerCase();
+
+        if (lang === 'python') {
+            if (pTitle.includes('two sum')) {
+                return `import sys
+
+def two_sum():
+    tokens = sys.stdin.read().split()
+    if len(tokens) < 2:
+        return
+    n = int(tokens[0])
+    target = int(tokens[1])
+    nums = [int(x) for x in tokens[2:2 + n]]
+
+    lookup = {}
+    for i, num in enumerate(nums):
+        diff = target - num
+        if diff in lookup:
+            print(f"{lookup[diff]} {i}")
+            return
+        lookup[num] = i
+
+if __name__ == '__main__':
+    two_sum()
+`;
+            } else if (pTitle.includes('fizz')) {
+                return `import sys
+
+def fizz_buzz():
+    tokens = sys.stdin.read().split()
+    if not tokens:
+        return
+    n = int(tokens[0])
+    for i in range(1, n + 1):
+        if i % 15 == 0:
+            print("FizzBuzz")
+        elif i % 3 == 0:
+            print("Fizz")
+        elif i % 5 == 0:
+            print("Buzz")
+        else:
+            print(i)
+
+if __name__ == '__main__':
+    fizz_buzz()
+`;
+            }
+            return `import sys
+
+def solve():
+    # Read inputs from standard input
+    input_data = sys.stdin.read().split()
+    if not input_data:
+        return
+
+    # Write your solution logic here
+    print(" ".join(input_data))
+
+if __name__ == '__main__':
+    solve()
+`;
+        } else if (lang === 'cpp' || lang === 'c++') {
+            return `#include <iostream>
+#include <vector>
+#include <string>
+
+using namespace std;
+
+int main() {
+    ios_base::sync_with_stdio(false);
+    cin.tie(NULL);
+
+    string token;
+    while (cin >> token) {
+        cout << token << " ";
+    }
+    cout << "\\n";
+
+    return 0;
+}
+`;
+        } else if (lang === 'java') {
+            return `import java.util.Scanner;
+
+public class Main {
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        while (sc.hasNext()) {
+            System.out.print(sc.next() + " ");
+        }
+        System.out.println();
+    }
+}
+`;
+        } else {
+            return `const fs = require('fs');
+
+function solve() {
+    const input = fs.readFileSync(0, 'utf-8').trim();
+    if (!input) return;
+    console.log(input);
+}
+
+solve();
+`;
+        }
     },
 
     // ── Dry Run Execution (LeetCode "▶ Run") ──
@@ -810,13 +1167,22 @@ const SessionView = {
             return;
         }
         const code = this.getEditorCode();
-        if (!code.trim()) {
-            if (typeof Toast !== 'undefined') Toast.warning('Editor is empty. Write some code first.');
-            return;
+        if (this._isCodeEmpty(code, this._language)) {
+            if (typeof Toast !== 'undefined') Toast.error('Please write code before running.');
+            this._renderNoCodeError();
+            this.switchConsoleTab('test-result');
+            return null;
         }
+
+        if (this._currentLayoutMode !== 'code') {
+            this.setIdeLayout('code');
+        }
+        this._syncCurrentTestCaseFromDom();
+        this._ensureConsoleOpen();
 
         const runBtns = this._getAllRunBtns();
         runBtns.forEach(b => {
+            if (!b.dataset.idleHtml) b.dataset.idleHtml = b.innerHTML;
             b.disabled = true;
             b.innerHTML = `<span class="animate-spin inline-block w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full mr-1.5"></span> Running...`;
         });
@@ -860,7 +1226,7 @@ const SessionView = {
     },
 
     _renderDryRun(result, stdin = '') {
-        const testResultPanel = document.getElementById('panel-test-results');
+        const testResultPanel = document.getElementById('panel-test-results') || document.getElementById('panel-test-result');
         const outputPanel = document.getElementById('output-content');
         if (!testResultPanel) return;
 
@@ -879,9 +1245,9 @@ const SessionView = {
                         <span class="lc-stat-pill">⏱ Runtime: <strong class="text-white">${timeMs.toFixed(1)} ms</strong></span>
                         <span class="lc-stat-pill">💾 Memory: <strong class="text-white">16.4 MB</strong></span>
                         ${isSuccess ? `
-                            <button class="lc-submit-btn !h-7 !px-3 text-xs" onclick="SessionView.submit()" title="Execution passed! Submit for AI Verdict">
-                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
-                                Submit for AI Verdict
+                            <button class="lc-submit-btn !h-7 !px-3 text-xs" onclick="SessionView.submit()" title="Execution passed! Run full AI verdict analysis">
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                                Run Full AI Analysis
                             </button>
                         ` : ''}
                     </div>
@@ -928,10 +1294,18 @@ const SessionView = {
             return;
         }
         const code = this.getEditorCode();
-        if (!code.trim()) {
-            if (typeof Toast !== 'undefined') Toast.warning('Editor is empty. Please enter your code before submitting.');
+        if (this._isCodeEmpty(code, this._language)) {
+            if (typeof Toast !== 'undefined') Toast.error('Cannot submit empty code. Please write your solution first.');
+            this._renderNoCodeError();
+            this.switchConsoleTab('test-result');
             return;
         }
+
+        if (this._currentLayoutMode !== 'code') {
+            this.setIdeLayout('code');
+        }
+        this._syncCurrentTestCaseFromDom();
+        this._ensureConsoleOpen();
 
         const userCases = (this._testCases && this._testCases.length > 0) ? this._testCases.map((tc, idx) => ({
             test_id: idx + 1,
@@ -942,32 +1316,30 @@ const SessionView = {
             is_edge_case: tc.is_edge_case || false
         })) : null;
 
-        // Ensure the code runs successfully on user-given test cases before analysis
-        const isAlreadyTestedAndPassed = this._lastRunPassed && (this._lastRunCode === code);
-        if (!isAlreadyTestedAndPassed) {
-            if (typeof Toast !== 'undefined') Toast.info('Running code on test cases to verify before analysis...');
-            const preResult = await this.dryRun();
-            if (!preResult || !preResult.passed) {
-                if (typeof Toast !== 'undefined') {
-                    Toast.error('Code failed on test cases. It must run successfully before analyzing.');
-                }
-                this.switchConsoleTab('test-result');
-                this._resetSubmitButtons();
-                return; // Stop! Do not analyze failing code
-            }
-        }
-
         const submitBtns = this._getAllSubmitBtns();
         submitBtns.forEach(b => {
+            if (!b.dataset.idleHtml) b.dataset.idleHtml = b.innerHTML;
             b.disabled = true;
-            b.innerHTML = `<span class="animate-spin inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full mr-2"></span> Evaluating...`;
+            b.innerHTML = `<span class="animate-spin inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full mr-2"></span> Analyzing...`;
         });
 
+        // Instant visual feedback in test results tab
+        const testResultPanel = document.getElementById('panel-test-results') || document.getElementById('panel-test-result');
+        if (testResultPanel) {
+            testResultPanel.innerHTML = `
+                <div class="p-8 flex flex-col items-center justify-center text-center space-y-3">
+                    <div class="w-8 h-8 border-2 border-[#007acc] border-t-transparent rounded-full animate-spin"></div>
+                    <div class="text-sm font-semibold text-text-primary">Submitting Solution to Verdict Judge...</div>
+                    <p class="text-xs text-text-tertiary max-w-sm">Generating comprehensive edge cases, executing sandboxed tests, and deriving 6-signal scores.</p>
+                </div>
+            `;
+        }
+        this.switchConsoleTab('test-result');
         this._showPipelineRunning();
 
         try {
             await ApiClient.submitSession(this._sessionId, code, userCases, this._language);
-            if (typeof Toast !== 'undefined') Toast.info('Submitted! Running multi-stage judge verification...');
+            if (typeof Toast !== 'undefined') Toast.info('Submission accepted! Running multi-stage evaluation judge...');
             this._pollPipeline(this._sessionId);
         } catch (err) {
             if (typeof Toast !== 'undefined') Toast.error(`Submission failed: ${err.message}`);

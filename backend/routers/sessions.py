@@ -25,7 +25,7 @@ from schemas import (
     SessionCreate, SessionSubmit, SessionResponse,
     DryRunResultResponse, TestResultDetail, AnalysisResultResponse,
     FailingCaseDetail, QualityIssue, ProblemResponse,
-    EvaluationProfileResponse, RunTestsResponse
+    EvaluationProfileResponse, RunTestsResponse, TestCaseResponse
 )
 from pipeline.orchestrator import run_pipeline
 
@@ -94,11 +94,44 @@ async def create_session(
     await db.commit()
     await db.refresh(new_session)
 
+    # Persist initial test cases if supplied
+    if session_data.test_cases and len(session_data.test_cases) > 0:
+        for idx, tc in enumerate(session_data.test_cases):
+            db_tc = GeneratedTestCase(
+                session_id=new_session.session_id,
+                test_case_id=tc.test_case_id or f"Case {idx + 1}",
+                description=tc.description or f"Sample Case {idx + 1}",
+                stdin=tc.stdin if tc.stdin is not None else "",
+                expected_stdout=tc.expected_stdout if tc.expected_stdout is not None else "",
+                is_edge_case=tc.is_edge_case,
+            )
+            db.add(db_tc)
+        await db.commit()
+
     return {
         "session_id": new_session.session_id,
         "status": "draft",
         "message": "Session created successfully",
     }
+
+
+def is_code_empty(code: str, language: str = "python") -> bool:
+    """Checks whether the code contains any executable statements (not just comments or whitespace)."""
+    if not code or not code.strip():
+        return True
+    
+    import re
+    lang = (language or "python").lower()
+    stripped = code
+    if lang == "python":
+        stripped = re.sub(r'"""[\s\S]*?"""', '', stripped)
+        stripped = re.sub(r"'''[\s\S]*?'''", '', stripped)
+        stripped = re.sub(r'#.*$', '', stripped, flags=re.MULTILINE)
+    else:
+        stripped = re.sub(r'/\*[\s\S]*?\*/', '', stripped)
+        stripped = re.sub(r'//.*$', '', stripped, flags=re.MULTILINE)
+    
+    return len(stripped.strip()) == 0
 
 
 @router.post("/{session_id}/dry-run", response_model=DryRunResultResponse)
@@ -129,6 +162,43 @@ async def dry_run_session(
     session.code = submission.code
     if submission.language:
         session.language = submission.language.lower()
+
+    # Guard: Never allow code with only comments or whitespace to execute or pass
+    if is_code_empty(submission.code, session.language):
+        err_msg = "Error: No executable code provided. Please implement your solution before running."
+        dry_run_record = DryRunResult(
+            session_id=session_id,
+            passed=False,
+            stdout="",
+            stderr=err_msg,
+            error_line=None
+        )
+        db.add(dry_run_record)
+        session.status = "dry_run_failed"
+        await db.commit()
+        await db.refresh(dry_run_record)
+        return DryRunResultResponse(
+            dry_run_id=dry_run_record.dry_run_id,
+            passed=False,
+            stdout="",
+            stderr=err_msg,
+            error_line=None,
+            time_ms=0.0,
+            test_results=[
+                TestResultDetail(
+                    test_case_id="Case 1",
+                    description="Code Validation",
+                    stdin="",
+                    expected_stdout="",
+                    actual_stdout="",
+                    passed=False,
+                    is_edge_case=False,
+                    time_ms=0.0,
+                    stderr=err_msg
+                )
+            ],
+            created_at=dry_run_record.created_at
+        )
 
     from pipeline.code_runner import code_runner
     from pipeline.error_parser import parse_error_line
@@ -189,6 +259,24 @@ async def dry_run_session(
         stderr = "\n".join(combined_stderr) if combined_stderr else None
         stdout = "\n".join(stdout_parts) if stdout_parts else None
         error_line = first_err_line
+
+        # Persist test cases to GeneratedTestCase for this session if not already stored
+        existing_tcs_res = await db.execute(
+            select(GeneratedTestCase).where(GeneratedTestCase.session_id == session_id)
+        )
+        existing_tcs = list(existing_tcs_res.scalars().all())
+        if not existing_tcs:
+            for tc_obj in test_case_objs:
+                new_tc = GeneratedTestCase(
+                    session_id=session_id,
+                    test_case_id=tc_obj.test_case_id,
+                    description=tc_obj.description,
+                    stdin=tc_obj.stdin,
+                    expected_stdout=tc_obj.expected_stdout,
+                    is_edge_case=tc_obj.is_edge_case,
+                )
+                db.add(new_tc)
+            await db.commit()
 
     # 2. Single stdin run
     elif submission.stdin is not None and submission.stdin != "":
@@ -272,6 +360,31 @@ async def run_session_tests(
     session.code = submission.code
     if submission.language:
         session.language = submission.language.lower()
+
+    if is_code_empty(submission.code, session.language):
+        err_msg = "Error: No executable code provided. Please implement your solution before running."
+        return RunTestsResponse(
+            passed=False,
+            passed_count=0,
+            total_count=1,
+            time_ms=0.0,
+            error_line=None,
+            stderr=err_msg,
+            test_results=[
+                TestResultDetail(
+                    test_case_id="Case 1",
+                    description="Code Validation",
+                    stdin="",
+                    expected_stdout="",
+                    actual_stdout="",
+                    passed=False,
+                    is_edge_case=False,
+                    time_ms=0.0,
+                    stderr=err_msg
+                )
+            ]
+        )
+
     from pipeline.code_runner import code_runner
     from pipeline.error_parser import parse_error_line
 
@@ -370,13 +483,20 @@ async def submit_session(
     Returns:
         dict: { session_id, status, message }
     """
-    # Load the session
     result = await db.execute(
         select(Session).where(Session.session_id == session_id)
     )
     session = result.scalars().first()
     if not session:
         raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+
+    # Guard: Never allow code with only comments or whitespace to be submitted
+    lang = submission.language or session.language or "python"
+    if is_code_empty(submission.code, lang):
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot submit empty code. Please implement your solution before submitting."
+        )
 
     # Atomic check & update: don't allow re-submission while in-flight pipeline steps are actively running
     in_flight_statuses = ["generating_tests", "executing", "analyzing"]
@@ -513,7 +633,25 @@ async def get_session(
     tc_result = await db.execute(
         select(GeneratedTestCase).where(GeneratedTestCase.session_id == session_id)
     )
-    test_cases = tc_result.scalars().all()
+    test_cases = list(tc_result.scalars().all())
+
+    # If this session has no test cases yet, reuse AI/user test cases from prior sessions for the same problem
+    if not test_cases and session.problem_id:
+        prior_tc_result = await db.execute(
+            select(GeneratedTestCase)
+            .join(Session, Session.session_id == GeneratedTestCase.session_id)
+            .where(Session.problem_id == session.problem_id)
+            .order_by(GeneratedTestCase.test_id.asc())
+        )
+        prior_tcs = list(prior_tc_result.scalars().all())
+        seen_stdin = set()
+        deduped = []
+        for ptc in prior_tcs:
+            norm_in = (ptc.stdin or "").strip()
+            if norm_in not in seen_stdin:
+                seen_stdin.add(norm_in)
+                deduped.append(ptc)
+        test_cases = deduped
 
     er_result = await db.execute(
         select(ExecutionResult).where(ExecutionResult.session_id == session_id)
@@ -611,6 +749,7 @@ async def get_session(
             created_at=dry_run.created_at,
         ) if dry_run else None,
         test_results=test_result_details if test_result_details else None,
+        test_cases=[TestCaseResponse.model_validate(tc) for tc in test_cases] if test_cases else None,
         analysis=analysis_response,
     )
 
@@ -626,12 +765,16 @@ async def list_sessions(
     Used for the sidebar session list. Returns basic session info
     without all the nested detail data.
     """
-    query = select(Session).order_by(Session.created_at.desc())
+    query = (
+        select(Session, AnalysisResult.final_score)
+        .outerjoin(AnalysisResult, AnalysisResult.session_id == Session.session_id)
+        .order_by(Session.created_at.desc())
+    )
     if problem_id:
         query = query.where(Session.problem_id == problem_id)
 
     result = await db.execute(query)
-    sessions = result.scalars().all()
+    rows = result.all()
 
     return [
         {
@@ -640,10 +783,11 @@ async def list_sessions(
             "submission_label": s.submission_label,
             "language": s.language,
             "status": s.status,
+            "final_score": score,
             "created_at": s.created_at.isoformat() if s.created_at else None,
             "updated_at": s.updated_at.isoformat() if s.updated_at else None,
         }
-        for s in sessions
+        for s, score in rows
     ]
 
 
@@ -664,13 +808,59 @@ def _get_boilerplate(language: str) -> str:
     """
     Return language-specific boilerplate code for new sessions.
     
-    Gives users a starting template with the basic I/O setup
+    Gives users a starting template with executable I/O setup
     for each supported language.
     """
     boilerplates = {
-        "python": '# Read input and write output\n# Example: import sys; lines = sys.stdin.read().split()\n\n',
-        "cpp": '#include <iostream>\nusing namespace std;\n\nint main() {\n    // Read input and write output\n    // Example: int n; cin >> n;\n    \n    return 0;\n}\n',
-        "java": 'import java.util.Scanner;\n\npublic class Main {\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        // Read input and write output\n        // Example: int n = sc.nextInt();\n        \n    }\n}\n',
-        "javascript": '// Read input and write output\nconst fs = require("fs");\nconst input = fs.readFileSync(0, "utf-8").trim();\n\n',
+        "python": (
+            "import sys\n\n"
+            "def solve():\n"
+            "    # Read inputs from standard input\n"
+            "    input_data = sys.stdin.read().split()\n"
+            "    if not input_data:\n"
+            "        return\n"
+            "    \n"
+            "    # Solution logic here\n"
+            "    print(\" \".join(input_data))\n\n"
+            "if __name__ == '__main__':\n"
+            "    solve()\n"
+        ),
+        "cpp": (
+            "#include <iostream>\n"
+            "#include <vector>\n"
+            "#include <string>\n\n"
+            "using namespace std;\n\n"
+            "int main() {\n"
+            "    ios_base::sync_with_stdio(false);\n"
+            "    cin.tie(NULL);\n\n"
+            "    string token;\n"
+            "    while (cin >> token) {\n"
+            "        cout << token << \" \";\n"
+            "    }\n"
+            "    cout << \"\\n\";\n"
+            "    return 0;\n"
+            "}\n"
+        ),
+        "java": (
+            "import java.util.Scanner;\n\n"
+            "public class Main {\n"
+            "    public static void main(String[] args) {\n"
+            "        Scanner sc = new Scanner(System.in);\n"
+            "        while (sc.hasNext()) {\n"
+            "            System.out.print(sc.next() + \" \");\n"
+            "        }\n"
+            "        System.out.println();\n"
+            "    }\n"
+            "}\n"
+        ),
+        "javascript": (
+            "const fs = require('fs');\n\n"
+            "function solve() {\n"
+            "    const input = fs.readFileSync(0, 'utf-8').trim();\n"
+            "    if (!input) return;\n"
+            "    console.log(input);\n"
+            "}\n\n"
+            "solve();\n"
+        ),
     }
     return boilerplates.get(language, "")

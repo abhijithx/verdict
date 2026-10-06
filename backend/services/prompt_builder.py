@@ -24,12 +24,26 @@ class PromptBuilder:
         "Do NOT include markdown fences or any text outside the JSON."
     )
 
+    RECOMMENDATION_CHAT_SYSTEM_INSTRUCTION = (
+        "You are an elite competitive programming mentor and algorithms expert at Verdict AI. "
+        "Your mission is to resolve every doubt, confusion, or technical question the user has regarding "
+        "the problem, algorithmic strategy, data structures, code implementation, Big-O bounds, and edge cases.\n"
+        "Guidelines:\n"
+        "1. Educational Clarity: Explain concepts clearly and concisely with intuitive analogies, bullet points, and code snippets.\n"
+        "2. Step-by-Step Tracing & Dry Runs: When asked to explain or trace, provide clear step-by-step state changes or mini trace tables.\n"
+        "3. Resolving Doubts: Directly answer 'why' questions (e.g., why this data structure, why not greedy/DP, how to handle negative numbers or empty inputs).\n"
+        "4. Code Updates: If the user asks for code modifications, bug fixes, optimizations, or translations to another language, provide the complete, ready-to-run replacement in 'code_update'. Otherwise set 'code_update' to null.\n"
+        "5. Follow-up Suggestions: Always provide 2-4 concise, clickable follow-up doubts or questions in 'suggested_improvements' that help the user deepen their mastery.\n"
+        "6. Output Format: You MUST output ONLY a valid JSON object with keys: 'answer' (string), 'suggested_improvements' (list of strings), and 'code_update' (string or null)."
+    )
+
     EVALUATION_SYSTEM_INSTRUCTION = (
         "You are an expert code reviewer embedded in an advanced web IDE. "
         "You review code in Python, C++, or Java against a user-supplied problem statement. "
         "You must always respond with a single valid JSON object and nothing else — "
         "no markdown fences, no commentary outside the JSON."
     )
+
 
     @staticmethod
     def build_recommendation_prompt(
@@ -81,6 +95,8 @@ class PromptBuilder:
                 "4. The 'recommended_data_structure' MUST name a specific structure (e.g., 'Hash Map', "
                 "'Min-Heap / Priority Queue', 'Disjoint Set / Union-Find').\n\n"
                 "Output JSON MUST contain exactly these fields:\n"
+                "- title: (string) Canonical, concise problem title (e.g. 'Two Sum', 'LRU Cache', 'Valid Parentheses')\n"
+                "- difficulty: (string) 'easy', 'medium', or 'hard'\n"
                 "- category: (string) Algorithm family, e.g. 'Dynamic Programming', 'Graph Theory', 'Greedy', 'Sorting & Searching'\n"
                 "- recommended_algorithm: (string) Specific named algorithm\n"
                 "- recommended_data_structure: (string) Primary data structure used\n"
@@ -89,7 +105,41 @@ class PromptBuilder:
                 "- space_complexity: (string) Big-O notation, e.g. 'O(N)'\n"
                 "- optimized_code: (string) COMPLETE working code — reads stdin, writes stdout, handles edge cases\n"
                 "- explanation: (string) DETAILED algorithm walkthrough — the core logic, key insight, step-by-step reasoning\n"
-                "- alternative_approaches: (array) [{name, time_complexity, space_complexity, trade_offs}]"
+                "- alternative_approaches: (array) [{name, time_complexity, space_complexity, trade_offs}]\n"
+                "- sample_test_cases: (array) 1 to 3 test cases for code execution: [{stdin: (string), expected_stdout: (string), description: (string)}]"
+            )
+        }
+        return json.dumps(payload, indent=2)
+
+    @staticmethod
+    def build_recommendation_chat_prompt(
+        problem: str,
+        question: str,
+        code: Optional[str] = None,
+        algorithm: Optional[str] = None,
+        language: Optional[str] = None,
+        chat_history: Optional[List[Dict[str, str]]] = None,
+    ) -> str:
+        """
+        Build JSON request prompt for interactive AI Copilot Q&A on recommendation.
+        """
+        payload = {
+            "request_type": "recommendation_chat",
+            "problem_statement": problem,
+            "current_algorithm": algorithm or "Optimal Algorithm",
+            "language": language or "Python",
+            "current_reference_code": code or "None provided",
+            "user_question": question,
+            "recent_chat_history": chat_history[-6:] if chat_history else [],
+            "instructions": (
+                "You are an elite competitive programming mentor and algorithms expert at Verdict AI. "
+                "The user is asking a question or seeking doubt resolution about this problem and algorithm. "
+                "Directly resolve their doubt with intuitive explanations, step-by-step logic, edge-case analysis, or dry-run traces. "
+                "Use clean markdown formatting (headers, bold text, bullet points, and code blocks). "
+                "If the user asks for code changes, optimizations, bug fixes, or translations to another language, provide the full, "
+                "clean, working updated code in 'code_update'. Otherwise set 'code_update' to null. "
+                "Always provide 2 to 4 concise, clickable follow-up doubts or questions in 'suggested_improvements' that the user can explore next.\n"
+                "Return JSON with keys: 'answer' (string), 'suggested_improvements' (list of strings), 'code_update' (string or null)."
             )
         }
         return json.dumps(payload, indent=2)

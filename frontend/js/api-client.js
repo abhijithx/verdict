@@ -121,6 +121,7 @@ const ApiClient = {
                     submission_label: p.submission_label || 'Draft',
                     profile_id: p.profile_id || null,
                     code: p.code || '',
+                    test_cases: p.test_cases || null,
                 }),
             });
         }
@@ -210,16 +211,12 @@ const ApiClient = {
 
     /** Export session report as PDF (returns a Blob) */
     async exportSessionPdf(sessionId) {
-        const response = await fetch(`${API_BASE}/sessions/${sessionId}/export`);
-        if (!response.ok) throw new Error('PDF export failed');
-        return await response.blob();
+        return this._fetch(`/sessions/${sessionId}/export`);
     },
 
     /** Export leaderboard as PDF (returns a Blob) */
     async exportLeaderboardPdf(problemId) {
-        const response = await fetch(`${API_BASE}/problems/${problemId}/export`);
-        if (!response.ok) throw new Error('PDF export failed');
-        return await response.blob();
+        return this._fetch(`/problems/${problemId}/export`);
     },
 
     // ====================================================================
@@ -234,6 +231,15 @@ const ApiClient = {
         });
     },
 
+    /** Ask Verdict AI Copilot a question regarding recommendation */
+    async askRecommendationQuestion(data) {
+        return this._fetch('/recommendation/ask', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    },
+
+
     /** Direct Solution Evaluation submit */
     async submitEvaluation(data) {
         return this._fetch('/evaluation', {
@@ -244,9 +250,13 @@ const ApiClient = {
 
     /** Get unified platform history */
     async getHistory(searchQuery = '', moduleType = 'all') {
+        if (searchQuery === 'evaluation' || searchQuery === 'recommendation') {
+            moduleType = searchQuery;
+            searchQuery = '';
+        }
         const params = new URLSearchParams();
         if (searchQuery) params.append('q', searchQuery);
-        if (moduleType) params.append('type', moduleType);
+        if (moduleType && moduleType !== 'all') params.append('type', moduleType);
         const queryStr = params.toString() ? `?${params.toString()}` : '';
         return this._fetch(`/history${queryStr}`);
     },
@@ -273,14 +283,40 @@ const ApiClient = {
         return `${API_BASE}/sessions/${sessionId}/export`;
     },
 
-    /** Export a session report as PDF */
-    async exportSessionPdf(sessionId) {
-        return this._fetch(`/sessions/${sessionId}/export`);
+    // ====================================================================
+    // LeetCode Integration endpoints
+    // ====================================================================
+
+    /** Fetch full problem details from LeetCode */
+    async fetchLeetCodeProblem(urlOrSlug) {
+        return this._fetch('/leetcode/fetch', {
+            method: 'POST',
+            body: JSON.stringify({ url_or_slug: urlOrSlug }),
+        });
     },
 
-    /** Export a problem leaderboard as PDF */
-    async exportLeaderboardPdf(problemId) {
-        return this._fetch(`/problems/${problemId}/export`);
+    /** Fetch and save a LeetCode problem into Verdict database */
+    async importLeetCodeProblem(urlOrSlug) {
+        return this._fetch('/leetcode/import', {
+            method: 'POST',
+            body: JSON.stringify({ url_or_slug: urlOrSlug }),
+        });
+    },
+
+    /** Search across 4,000+ LeetCode problems */
+    async searchLeetCodeProblems(params = {}) {
+        const q = new URLSearchParams();
+        if (params.keyword) q.append('keyword', params.keyword);
+        if (params.difficulty) q.append('difficulty', params.difficulty);
+        if (params.skip !== undefined) q.append('skip', params.skip);
+        if (params.limit !== undefined) q.append('limit', params.limit);
+        const queryStr = q.toString() ? `?${q.toString()}` : '';
+        return this._fetch(`/leetcode/problems${queryStr}`);
+    },
+
+    /** Get curated classic problems */
+    async getLeetCodeCurated() {
+        return this._fetch('/leetcode/curated');
     },
 };
 
@@ -295,3 +331,4 @@ function downloadBlob(blob, filename) {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 }
+window.downloadBlob = downloadBlob;

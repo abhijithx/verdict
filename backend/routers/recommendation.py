@@ -10,7 +10,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
-from schemas import RecommendationRequest, RecommendationResponse, AlternativeApproach
+from schemas import (
+    RecommendationRequest,
+    RecommendationResponse,
+    AlternativeApproach,
+    RecommendationTestCase,
+    RecommendationAskRequest,
+    RecommendationAskResponse,
+)
 from services.gemini_client import gemini_client, GeminiAPIError
 from services.history_service import history_service
 from services.logger import get_logger
@@ -79,8 +86,20 @@ async def get_solution_recommendation(
                 trade_offs=item.get("trade_offs", "N/A")
             ))
 
+    # Transform sample_test_cases list of dicts to schema objects
+    sample_tcs = []
+    for tc in rec_data.get("sample_test_cases", []):
+        if isinstance(tc, dict):
+            sample_tcs.append(RecommendationTestCase(
+                stdin=str(tc.get("stdin", "") or ""),
+                expected_stdout=str(tc.get("expected_stdout", "") or ""),
+                description=str(tc.get("description", "Sample Case") or "Sample Case")
+            ))
+
     return RecommendationResponse(
         id=history_entry.id,
+        title=rec_data.get("title", "Optimal Solution"),
+        difficulty=rec_data.get("difficulty", "medium"),
         category=rec_data.get("category", "General Algorithm"),
         recommended_algorithm=rec_data.get("recommended_algorithm", "Optimal Strategy"),
         recommended_data_structure=rec_data.get("recommended_data_structure", "Standard Structures"),
@@ -90,5 +109,36 @@ async def get_solution_recommendation(
         optimized_code=rec_data.get("optimized_code", ""),
         explanation=rec_data.get("explanation", ""),
         alternative_approaches=alts,
+        sample_test_cases=sample_tcs,
         timestamp=history_entry.timestamp
     )
+
+
+@router.post("/ask", response_model=RecommendationAskResponse, dependencies=[Depends(check_ai_rate_limit)])
+async def ask_recommendation_copilot(
+    request: RecommendationAskRequest
+):
+    """
+    Ask follow-up questions, debug logic, request edge-case analysis or
+    code optimizations from Verdict AI Copilot for this problem.
+    """
+    if not request.question or not request.question.strip():
+        raise HTTPException(status_code=400, detail="Question cannot be empty.")
+
+    logger.info(f"AI Copilot question for algorithm '{request.algorithm}': {request.question[:60]}")
+
+    result = await gemini_client.answer_recommendation_question(
+        problem=request.problem,
+        question=request.question,
+        code=request.code,
+        algorithm=request.algorithm,
+        language=request.language,
+        chat_history=request.chat_history,
+    )
+
+    return RecommendationAskResponse(
+        answer=result.get("answer", ""),
+        suggested_improvements=result.get("suggested_improvements", []),
+        code_update=result.get("code_update")
+    )
+

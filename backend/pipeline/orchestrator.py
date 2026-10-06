@@ -100,6 +100,22 @@ async def run_pipeline(session_id: int):
             # ================================================================
             # STEP 1: Dry Run — compile/runtime check with testcase stdin if available
             # ================================================================
+            from routers.sessions import is_code_empty
+            if is_code_empty(session.code, session.language):
+                err_msg = "Error: No executable code provided. Please implement your solution before submitting."
+                db_dry_run = DryRunResult(
+                    session_id=session_id,
+                    passed=False,
+                    stdout="",
+                    stderr=err_msg,
+                    error_line=None,
+                )
+                db.add(db_dry_run)
+                await db.commit()
+                await _update_status(db, session_id, "dry_run_failed")
+                print(f"[PIPELINE] Dry run failed for session {session_id}: No executable code provided.")
+                return
+
             existing_tcs_res = await db.execute(
                 select(GeneratedTestCase).where(GeneratedTestCase.session_id == session_id)
             )
@@ -131,6 +147,34 @@ async def run_pipeline(session_id: int):
             # ================================================================
             # Augment with AI test cases if fewer than 4 test cases exist
             if len(db_test_cases) < 4:
+                # First, check if prior sessions for this problem already have test cases stored
+                prior_tcs_res = await db.execute(
+                    select(GeneratedTestCase)
+                    .join(Session, Session.session_id == GeneratedTestCase.session_id)
+                    .where(Session.problem_id == session.problem_id, Session.session_id != session_id)
+                    .order_by(GeneratedTestCase.test_id.asc())
+                )
+                prior_tcs = list(prior_tcs_res.scalars().all())
+                for ptc in prior_tcs:
+                    if len(db_test_cases) >= 5:
+                        break
+                    ptc_in = (ptc.stdin or "").strip()
+                    if not any((etc.stdin or "").strip() == ptc_in for etc in db_test_cases):
+                        new_tc = GeneratedTestCase(
+                            session_id=session_id,
+                            test_case_id=ptc.test_case_id or f"ai_{len(db_test_cases) + 1}",
+                            description=ptc.description or "AI test case",
+                            stdin=ptc.stdin or "",
+                            expected_stdout=ptc.expected_stdout or "",
+                            is_edge_case=ptc.is_edge_case,
+                        )
+                        db.add(new_tc)
+                        db_test_cases.append(new_tc)
+                if db_test_cases:
+                    await db.commit()
+
+            # If still fewer than 4 test cases, generate new edge cases using AI
+            if len(db_test_cases) < 4:
                 await _update_status(db, session_id, "generating_tests")
                 print(f"[PIPELINE] Step 2: Generating AI edge cases for session {session_id} (already has {len(db_test_cases)} user cases)")
 
@@ -146,7 +190,7 @@ async def run_pipeline(session_id: int):
                     for tc in first_response.test_cases:
                         # Avoid duplicates
                         tc_stdin = (tc.stdin or "").strip()
-                        if any(etc.stdin.strip() == tc_stdin for etc in db_test_cases):
+                        if any((etc.stdin or "").strip() == tc_stdin for etc in db_test_cases):
                             continue
                         db_tc = GeneratedTestCase(
                             session_id=session_id,

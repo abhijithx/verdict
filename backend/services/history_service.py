@@ -115,6 +115,10 @@ class HistoryService:
                 results.append({
                     "id": f"eval_{sess.session_id}",
                     "raw_id": sess.session_id,
+                    "session_id": sess.session_id,
+                    "problem_id": sess.problem_id,
+                    "status": sess.status,
+                    "score": score,
                     "module": "evaluation",
                     "title": prob.title if prob else f"Session #{sess.session_id}",
                     "problem": prob.description if prob else "",
@@ -124,6 +128,7 @@ class HistoryService:
                     "final_score": score,
                     "complexity": f"{ana.time_complexity or 'N/A'} time" if ana else "N/A",
                     "timestamp": sess.created_at.isoformat() if sess.created_at else None,
+                    "created_at": sess.created_at.isoformat() if sess.created_at else None,
                 })
 
         # Sort all results by timestamp descending
@@ -210,6 +215,11 @@ class HistoryService:
             return True
         elif item_id.startswith("eval_"):
             raw_id = int(item_id.replace("eval_", ""))
+            from models import DryRunResult, GeneratedTestCase, ExecutionResult, AnalysisResult
+            await db.execute(delete(AnalysisResult).where(AnalysisResult.session_id == raw_id))
+            await db.execute(delete(ExecutionResult).where(ExecutionResult.session_id == raw_id))
+            await db.execute(delete(GeneratedTestCase).where(GeneratedTestCase.session_id == raw_id))
+            await db.execute(delete(DryRunResult).where(DryRunResult.session_id == raw_id))
             await db.execute(delete(Session).where(Session.session_id == raw_id))
             await db.commit()
             return True

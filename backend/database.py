@@ -34,6 +34,14 @@ engine = create_async_engine(
     connect_args={"check_same_thread": False}
 )
 
+from sqlalchemy import event
+
+@event.listens_for(engine.sync_engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
+
 # Session factory — each call to AsyncSessionLocal() creates a new session
 # expire_on_commit=False prevents attributes from being expired after commit,
 # which is useful when returning ORM objects from endpoints

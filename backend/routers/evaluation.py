@@ -43,10 +43,18 @@ async def evaluate_solution(
     problem = prob_res.scalars().first()
 
     if not problem:
+        full_desc = request.problem
+        if request.constraints or request.sample_input or request.sample_output:
+            full_desc += "\n\n"
+            if request.constraints:
+                full_desc += f"### Constraints\n{request.constraints}\n\n"
+            if request.sample_input or request.sample_output:
+                full_desc += f"### Example\n- Input: `{request.sample_input or ''}`\n- Output: `{request.sample_output or ''}`\n\n"
+
         problem = Problem(
             title=request.problem[:255],
-            description=request.problem,
-            difficulty="medium"
+            description=full_desc,
+            difficulty=(request.difficulty or "medium").lower()
         )
         db.add(problem)
         await db.commit()
@@ -74,6 +82,32 @@ async def evaluate_solution(
     db.add(session)
     await db.commit()
     await db.refresh(session)
+
+    # Persist initial test cases if supplied
+    from models import GeneratedTestCase
+    if request.test_cases and len(request.test_cases) > 0:
+        for idx, tc in enumerate(request.test_cases):
+            db_tc = GeneratedTestCase(
+                session_id=session.session_id,
+                test_case_id=tc.test_case_id or f"Case {idx + 1}",
+                description=tc.description or f"Sample Case {idx + 1}",
+                stdin=tc.stdin if tc.stdin is not None else "",
+                expected_stdout=tc.expected_stdout if tc.expected_stdout is not None else "",
+                is_edge_case=tc.is_edge_case,
+            )
+            db.add(db_tc)
+        await db.commit()
+    elif request.sample_input or request.sample_output:
+        db_tc = GeneratedTestCase(
+            session_id=session.session_id,
+            test_case_id="Case 1",
+            description="Sample Case",
+            stdin=request.sample_input or "",
+            expected_stdout=request.sample_output or "",
+            is_edge_case=False,
+        )
+        db.add(db_tc)
+        await db.commit()
 
     # Trigger background evaluation pipeline
     background_tasks.add_task(run_pipeline, session.session_id)

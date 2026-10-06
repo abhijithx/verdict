@@ -34,38 +34,70 @@ class JSONValidator:
     def clean_json_string(cls, raw_text: str) -> str:
         """
         Clean markdown fences or stray commentary around JSON text.
+        Applies multi-pass repairs for trailing commas and formatting quirks.
         """
         if not raw_text:
             return ""
         text = raw_text.strip()
 
-        # 1. Try markdown fence extraction
-        fence_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', text)
-        if fence_match:
-            candidate = fence_match.group(1).strip()
+        def try_parse(candidate: str) -> Optional[str]:
+            if not candidate:
+                return None
             try:
                 json.loads(candidate)
                 return candidate
             except Exception:
                 pass
 
+            # Fix 1: Trailing commas before } or ]
+            fixed = re.sub(r',\s*([}\]])', r'\1', candidate)
+            try:
+                json.loads(fixed)
+                return fixed
+            except Exception:
+                pass
+
+            # Fix 2: Missing commas between lines e.g. "val"\n"key": or }\n{
+            fixed2 = re.sub(r'([}\]"0-9a-zA-Z_])\s*\n\s*(")', r'\1,\n\2', fixed)
+            try:
+                json.loads(fixed2)
+                return fixed2
+            except Exception:
+                pass
+
+            # Fix 3: Remove trailing junk after last }
+            last_brace = fixed.rfind("}")
+            if last_brace != -1:
+                cutoff = fixed[:last_brace + 1]
+                try:
+                    json.loads(cutoff)
+                    return cutoff
+                except Exception:
+                    pass
+
+            return None
+
+        # 1. Try markdown fence extraction
+        fence_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', text)
+        if fence_match:
+            cand = fence_match.group(1).strip()
+            parsed = try_parse(cand)
+            if parsed is not None:
+                return parsed
+
         # 2. Extract outermost JSON object { ... }
         start_brace = text.find("{")
         end_brace = text.rfind("}")
         if start_brace != -1 and end_brace != -1 and end_brace > start_brace:
-            candidate = text[start_brace:end_brace + 1].strip()
-            try:
-                json.loads(candidate)
-                return candidate
-            except Exception:
-                # Try fixing trailing commas before closing braces/brackets
-                fixed = re.sub(r',\s*([}\]])', r'\1', candidate)
-                try:
-                    json.loads(fixed)
-                    return fixed
-                except Exception:
-                    pass
-            return candidate
+            cand = text[start_brace:end_brace + 1].strip()
+            parsed = try_parse(cand)
+            if parsed is not None:
+                return parsed or cand
+
+        # 3. Direct attempt on raw text
+        parsed_direct = try_parse(text)
+        if parsed_direct is not None:
+            return parsed_direct
 
         return text
 

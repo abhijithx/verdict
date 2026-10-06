@@ -180,7 +180,12 @@ const HistoryUI = {
                         </div>
                     ` : `
                         <div>
-                            <h4 class="font-semibold text-text-secondary mb-1">Submitted Code (${detail.language})</h4>
+                            <div class="flex items-center justify-between mb-1">
+                                <h4 class="font-semibold text-text-secondary">Submitted Code (${detail.language})</h4>
+                                <button class="cmd-btn cmd-primary text-2xs !h-6 !px-2.5" onclick="HistoryUI.closeModal(); App.openSession(${detail.session_id || detail.raw_id})">
+                                    Open in Editor →
+                                </button>
+                            </div>
                             <pre class="bg-canvas p-3 rounded-lg border border-border-subtle font-mono text-2xs text-text-primary whitespace-pre-wrap overflow-x-auto">${this.escapeHtml(detail.user_code)}</pre>
                         </div>
                         ${detail.analysis ? `

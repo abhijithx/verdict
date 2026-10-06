@@ -101,35 +101,57 @@ const MonacoSetup = {
                 const activeLang = MonacoSetup._currentLanguage || language;
                 const code = initialCode || BOILERPLATES[activeLang] || '';
 
+                const vsCodeDarkPlusRules = [
+                    { token: '', background: '1e1e1e', foreground: 'd4d4d4' },
+                    { token: 'comment', foreground: '6a9955', fontStyle: 'italic' },
+                    { token: 'keyword', foreground: '569cd6', fontStyle: 'bold' },
+                    { token: 'keyword.control', foreground: 'c586c0' },
+                    { token: 'string', foreground: 'ce9178' },
+                    { token: 'number', foreground: 'b5cea8' },
+                    { token: 'type', foreground: '4ec9b0' },
+                    { token: 'function', foreground: 'dcdcaa' },
+                    { token: 'variable', foreground: '9cdcfe' },
+                    { token: 'variable.parameter', foreground: '9cdcfe' },
+                    { token: 'operator', foreground: 'd4d4d4' },
+                    { token: 'delimiter', foreground: 'd4d4d4' },
+                ];
+
+                const vsCodeDarkPlusColors = {
+                    'editor.background': '#1e1e1e',
+                    'editor.foreground': '#d4d4d4',
+                    'editor.lineHighlightBackground': '#282828',
+                    'editor.lineHighlightBorder': '#28282800',
+                    'editorCursor.foreground': '#007acc',
+                    'editor.selectionBackground': '#264f78',
+                    'editor.inactiveSelectionBackground': '#3a3d41',
+                    'editorWhitespace.foreground': '#333333',
+                    'editorIndentGuide.background': '#404040',
+                    'editorIndentGuide.activeBackground': '#007acc99',
+                    'editorLineNumber.foreground': '#858585',
+                    'editorLineNumber.activeForeground': '#c6c6c6',
+                    'editorGutter.background': '#1e1e1e',
+                    'editorBracketMatch.background': '#007acc33',
+                    'editorBracketMatch.border': '#007acc',
+                };
+
+                monaco.editor.defineTheme('vscode-dark-plus', {
+                    base: 'vs-dark',
+                    inherit: true,
+                    rules: vsCodeDarkPlusRules,
+                    colors: vsCodeDarkPlusColors,
+                });
+
                 monaco.editor.defineTheme('leetcode-dark', {
                     base: 'vs-dark',
                     inherit: true,
-                    rules: [
-                        { token: '', background: '1e1e1e' },
-                        { token: 'comment', foreground: '6a9955', fontStyle: 'italic' },
-                        { token: 'keyword', foreground: 'c586c0', fontStyle: 'bold' },
-                        { token: 'string', foreground: 'ce9178' },
-                        { token: 'number', foreground: 'b5cea8' },
-                        { token: 'type', foreground: '4ec9b0' },
-                        { token: 'function', foreground: 'dcdcaa' },
-                    ],
-                    colors: {
-                        'editor.background': '#1e1e1e',
-                        'editor.foreground': '#d4d4d4',
-                        'editor.lineHighlightBackground': '#282828',
-                        'editorCursor.foreground': '#2cbb5d',
-                        'editorWhitespace.foreground': '#333333',
-                        'editorIndentGuide.background': '#333333',
-                        'editorIndentGuide.activeBackground': '#555555',
-                        'editorLineNumber.foreground': '#6e7681',
-                        'editorLineNumber.activeForeground': '#cccccc',
-                    }
+                    rules: vsCodeDarkPlusRules,
+                    colors: vsCodeDarkPlusColors,
                 });
 
                 editorInstance = monaco.editor.create(container, {
                     value: code,
                     language: MONACO_LANG_MAP[activeLang] || 'python',
-                    theme: 'leetcode-dark',
+                    theme: 'vscode-dark-plus',
                     fontSize: 13.5,
                     fontFamily: "'JetBrains Mono', Consolas, 'Courier New', monospace",
                     fontLigatures: true,
@@ -174,8 +196,17 @@ const MonacoSetup = {
                 });
 
                 if (window.ResizeObserver && container) {
+                    let layoutRaf = null;
                     const ro = new ResizeObserver(() => {
-                        editorInstance.layout();
+                        if (container.offsetWidth === 0 || container.offsetHeight === 0) {
+                            return;
+                        }
+                        if (layoutRaf) cancelAnimationFrame(layoutRaf);
+                        layoutRaf = requestAnimationFrame(() => {
+                            if (editorInstance && container.offsetWidth > 0 && container.offsetHeight > 0) {
+                                editorInstance.layout();
+                            }
+                        });
                     });
                     ro.observe(container);
                 }
@@ -187,6 +218,14 @@ const MonacoSetup = {
                 resolve(editorInstance);
             });
         });
+    },
+
+    layout() {
+        const ed = this.getEditor();
+        const container = document.getElementById('editor-container');
+        if (ed && container && container.offsetWidth > 0 && container.offsetHeight > 0) {
+            ed.layout();
+        }
     },
 
     getEditor() {
@@ -294,8 +333,8 @@ const MonacoSetup = {
                     glyphMarginClassName: classes.glyph,
                     glyphMarginHoverMessage: { value: message },
                     overviewRuler: {
-                        color: severity === 'error' ? '#e0563f' : '#d9a441',
-                        position: monaco.editor.OverviewRulerLane.Full,
+                        color: severity === 'error' ? 'rgba(244, 63, 94, 0.7)' : 'rgba(245, 158, 11, 0.7)',
+                        position: monaco.editor.OverviewRulerLane.Right,
                     },
                 },
             },

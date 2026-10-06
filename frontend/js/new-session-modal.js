@@ -6,7 +6,7 @@ const NewSessionModal = {
     _lang: 'python',
     _problemId: 'new',
 
-    async open() {
+    async open(preselectedProblemId = null) {
         if (typeof App !== 'undefined') App._rememberFocus();
         document.getElementById('new-session-modal').classList.remove('hidden');
         if (typeof App !== 'undefined') App._focusModal('new-session-modal');
@@ -20,6 +20,9 @@ const NewSessionModal = {
                 o.value = p.problem_id;
                 o.textContent = `${p.title} (${p.difficulty})`;
                 sel.appendChild(o);
+            }
+            if (preselectedProblemId) {
+                sel.value = String(preselectedProblemId);
             }
         } catch (e) { console.error(e); }
 
@@ -40,13 +43,24 @@ const NewSessionModal = {
         } catch (e) { console.error(e); }
 
         this._lang = 'python';
-        this._problemId = 'new';
+        this._problemId = preselectedProblemId ? String(preselectedProblemId) : 'new';
+        const isNew = this._problemId === 'new';
+        const newFields = document.getElementById('new-problem-fields');
+        if (newFields) newFields.style.display = isNew ? '' : 'none';
+
+        const probSel = document.getElementById('modal-problem-select');
+        if (probSel && preselectedProblemId) probSel.value = String(preselectedProblemId);
+
         document.getElementById('modal-submission-label').value = '';
         document.getElementById('modal-problem-title').value = '';
         document.getElementById('modal-problem-desc').value = '';
-        document.getElementById('new-problem-fields').style.display = '';
         document.getElementById('custom-profile-panel').classList.add('hidden');
         this.selectLanguage('python');
+
+        if (preselectedProblemId) {
+            const labelInput = document.getElementById('modal-submission-label');
+            if (labelInput) setTimeout(() => labelInput.focus(), 50);
+        }
     },
 
     close() {
