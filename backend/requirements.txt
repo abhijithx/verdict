@@ -26,3 +26,4 @@ python-dotenv>=1.0.1
 
 # CORS middleware (included in FastAPI/Starlette, listed for clarity)
 # starlette[full] — already a FastAPI dependency
+markdownify>=0.11.0
