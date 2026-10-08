@@ -27,7 +27,7 @@ async def _call_gemini(
     prompt: str,
     temperature: float = 0.2
 ) -> str:
-    """Call Google Gemini API and return raw response text."""
+    """Call Google Gemini API with automatic model cascading if a model is unavailable."""
     from google import genai
     from google.genai import types
 
@@ -36,22 +36,31 @@ async def _call_gemini(
 
     client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
-    def _sync_call():
-        response = client.models.generate_content(
-            model=settings.GEMINI_MODEL,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=system_instruction,
-                response_mime_type="application/json",
-                temperature=temperature,
-            ),
-        )
-        return response.text.strip()
+    candidate_models = [settings.GEMINI_MODEL, "gemini-3.5-flash", "gemini-3-flash-preview", "gemini-3.1-flash-lite"]
+    seen = set()
+    models_to_try = [m for m in candidate_models if m and not (m in seen or seen.add(m))]
 
-    try:
-        return await asyncio.wait_for(asyncio.to_thread(_sync_call), timeout=45)
-    except asyncio.TimeoutError:
-        raise AIProviderError(f"Gemini API call timed out after 45 seconds (model: {settings.GEMINI_MODEL})")
+    last_err = None
+    for model_name in models_to_try:
+        def _sync_call(m_name=model_name):
+            response = client.models.generate_content(
+                model=m_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_instruction,
+                    response_mime_type="application/json",
+                    temperature=temperature,
+                ),
+            )
+            return response.text.strip()
+
+        try:
+            return await asyncio.wait_for(asyncio.to_thread(_sync_call), timeout=35)
+        except Exception as e:
+            last_err = e
+            logger.warning(f"Gemini model '{model_name}' encountered issue ({e}); trying next fallback model if available...")
+
+    raise AIProviderError(f"All Gemini candidate models failed. Last error: {last_err}")
 
 
 async def _call_groq(
@@ -59,7 +68,7 @@ async def _call_groq(
     prompt: str,
     temperature: float = 0.2
 ) -> str:
-    """Call Groq API (OpenAI-compatible) and return raw response text."""
+    """Call Groq API (OpenAI-compatible) with fallback model support."""
     if not settings.GROQ_API_KEY:
         raise AIProviderError("GROQ_API_KEY not configured")
 
@@ -73,34 +82,42 @@ async def _call_groq(
     if "json" not in sys_msg.lower():
         sys_msg += "\nYou MUST respond with a single valid JSON object."
 
-    payload = {
-        "model": settings.GROQ_MODEL,
-        "messages": [
-            {"role": "system", "content": sys_msg},
-            {"role": "user", "content": prompt},
-        ],
-        "temperature": temperature,
-        "max_tokens": 4096,
-    }
+    candidate_models = [settings.GROQ_MODEL, "openai/gpt-oss-120b", "qwen/qwen3.8-27b"]
+    seen = set()
+    models_to_try = [m for m in candidate_models if m and not (m in seen or seen.add(m))]
 
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        # First attempt with json_object format
-        payload["response_format"] = {"type": "json_object"}
-        resp = await client.post(url, headers=headers, json=payload)
+    last_err = None
+    async with httpx.AsyncClient(timeout=45.0) as client:
+        for model_name in models_to_try:
+            payload = {
+                "model": model_name,
+                "messages": [
+                    {"role": "system", "content": sys_msg},
+                    {"role": "user", "content": prompt},
+                ],
+                "temperature": temperature,
+                "max_tokens": 4096,
+                "response_format": {"type": "json_object"}
+            }
+            try:
+                resp = await client.post(url, headers=headers, json=payload)
+                if resp.status_code == 400:
+                    payload.pop("response_format", None)
+                    resp = await client.post(url, headers=headers, json=payload)
 
-        if resp.status_code == 400:
-            # Fallback attempt without rigid json_object enforcement
-            logger.warning(f"Groq json_object format rejected ({resp.text[:120]}); retrying without response_format...")
-            payload.pop("response_format", None)
-            resp = await client.post(url, headers=headers, json=payload)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    return data["choices"][0]["message"]["content"].strip()
+                elif resp.status_code in (429, 503):
+                    logger.warning(f"Groq model '{model_name}' rate limited/unavailable ({resp.status_code}), trying next model...")
+                    continue
+                else:
+                    last_err = f"Status {resp.status_code}: {resp.text[:200]}"
+            except Exception as ex:
+                last_err = str(ex)
+                continue
 
-        if resp.status_code == 429:
-            raise AIProviderError(f"Groq rate limit exceeded (429)")
-        if resp.status_code != 200:
-            raise AIProviderError(f"Groq API error {resp.status_code}: {resp.text[:200]}")
-
-        data = resp.json()
-        return data["choices"][0]["message"]["content"].strip()
+    raise AIProviderError(f"All Groq models failed. Last error: {last_err}")
 
 
 async def call_ai(

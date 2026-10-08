@@ -17,6 +17,7 @@ returns immediately and the pipeline runs asynchronously.
 """
 
 import traceback
+from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from models import (
@@ -52,6 +53,7 @@ async def _update_status(db: AsyncSession, session_id: int, status: str):
     session = result.scalars().first()
     if session:
         session.status = status
+        session.updated_at = datetime.now(timezone.utc)
         await db.commit()
         print(f"[PIPELINE] Session {session_id} -> {status}")
 
@@ -250,6 +252,16 @@ async def run_pipeline(session_id: int):
             # Ensure code runs successfully before AI analysis
             # If all test cases failed with runtime error or compilation error, halt before AI analysis
             if not exec_results or (passed_count == 0 and any(r.stderr for r in exec_results)):
+                first_err = next((r.stderr for r in exec_results if r.stderr), "Runtime error during test execution")
+                db_dry_run = DryRunResult(
+                    session_id=session_id,
+                    passed=False,
+                    stdout="",
+                    stderr=first_err,
+                    error_line=parse_error_line(first_err, session.language),
+                )
+                db.add(db_dry_run)
+                await db.commit()
                 await _update_status(db, session_id, "dry_run_failed")
                 session.history_summary = "Pipeline halted: all test cases failed execution or encountered runtime errors."
                 await db.commit()
@@ -364,6 +376,16 @@ async def run_pipeline(session_id: int):
             traceback.print_exc()
 
             try:
-                await _update_status(db, session_id, "failed")
+                result = await db.execute(
+                    select(Session).where(Session.session_id == session_id)
+                )
+                s = result.scalars().first()
+                if s:
+                    s.status = "failed"
+                    s.updated_at = datetime.now(timezone.utc)
+                    s.history_summary = f"Evaluation failed: {error_msg}"
+                    await db.commit()
+                else:
+                    await _update_status(db, session_id, "failed")
             except Exception:
                 pass  # Don't let status update failure mask the original error

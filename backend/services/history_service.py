@@ -210,11 +210,17 @@ class HistoryService:
         """Delete a history item by ID."""
         if item_id.startswith("rec_"):
             raw_id = int(item_id.replace("rec_", ""))
+            rec_check = await db.execute(select(RecommendationHistory).where(RecommendationHistory.id == raw_id))
+            if not rec_check.scalars().first():
+                return False
             await db.execute(delete(RecommendationHistory).where(RecommendationHistory.id == raw_id))
             await db.commit()
             return True
         elif item_id.startswith("eval_"):
             raw_id = int(item_id.replace("eval_", ""))
+            sess_check = await db.execute(select(Session).where(Session.session_id == raw_id))
+            if not sess_check.scalars().first():
+                return False
             from models import DryRunResult, GeneratedTestCase, ExecutionResult, AnalysisResult
             await db.execute(delete(AnalysisResult).where(AnalysisResult.session_id == raw_id))
             await db.execute(delete(ExecutionResult).where(ExecutionResult.session_id == raw_id))

@@ -97,9 +97,16 @@ const SessionView = {
             } else if (['generating_tests', 'executing', 'analyzing', 'pending'].includes(session.status)) {
                 this._showPipelineRunning();
                 this._pollPipeline(sessionId);
-            } else if (session.status === 'dry_run_failed' && session.dry_run) {
-                this._renderDryRun(session.dry_run);
+            } else if (session.status === 'dry_run_failed') {
+                if (session.test_results && session.test_results.length > 0) {
+                    this._renderTestResults(session.test_results);
+                } else if (session.dry_run) {
+                    this._renderDryRun(session.dry_run);
+                }
                 this.switchConsoleTab('test-result');
+            } else if (session.status === 'failed') {
+                this._renderFailure(session);
+                this.switchConsoleTab('analysis');
             } else {
                 this.switchConsoleTab('testcase');
             }
@@ -968,11 +975,11 @@ const SessionView = {
     },
 
     _getAllRunBtns() {
-        return Array.from(document.querySelectorAll('#ed-btn-run, button[onclick*="dryRun()"]'));
+        return Array.from(document.querySelectorAll('#ed-btn-run, #btn-run, .lc-run-btn, button[onclick*="dryRun()"]'));
     },
 
     _getAllSubmitBtns() {
-        return Array.from(document.querySelectorAll('#ed-btn-submit, button[onclick*="SessionView.submit()"]'));
+        return Array.from(document.querySelectorAll('#ed-btn-submit, #btn-submit, .lc-submit-btn, button[onclick*="SessionView.submit()"]'));
     },
 
     _resetRunButtons() {
@@ -1361,6 +1368,11 @@ solve();
     },
 
     _pollPipeline(sessionId) {
+        if (this._activePollInterval) {
+            clearInterval(this._activePollInterval);
+            this._activePollInterval = null;
+        }
+
         const statusMap = {
             pending: 'Initializing evaluation...',
             dry_run_passed: 'Dry run passed, generating tests...',
@@ -1369,21 +1381,38 @@ solve();
             analyzing: 'AI analyzing code performance & quality...'
         };
 
-        const pollInterval = setInterval(async () => {
+        let pollCount = 0;
+        let consecutiveErrors = 0;
+
+        this._activePollInterval = setInterval(async () => {
             if (this._sessionId !== sessionId) {
-                clearInterval(pollInterval);
+                clearInterval(this._activePollInterval);
+                this._activePollInterval = null;
+                return;
+            }
+
+            pollCount++;
+            if (pollCount > 65) {
+                // Safeguard against infinite spinner if background task stalls
+                clearInterval(this._activePollInterval);
+                this._activePollInterval = null;
+                this._hidePipelineRunning();
+                this._resetSubmitButtons();
+                if (typeof Toast !== 'undefined') Toast.warning('Evaluation taking longer than expected. Please check results or try submitting again.');
                 return;
             }
 
             try {
                 const session = await ApiClient.getSession(sessionId);
+                consecutiveErrors = 0;
                 const statusText = document.getElementById('pipeline-status-text');
                 if (statusText) {
                     statusText.textContent = statusMap[session.status] || 'Evaluating...';
                 }
 
                 if (session.status === 'complete' || session.status === 'failed' || session.status === 'dry_run_failed') {
-                    clearInterval(pollInterval);
+                    clearInterval(this._activePollInterval);
+                    this._activePollInterval = null;
                     this._hidePipelineRunning();
                     this._resetSubmitButtons();
 
@@ -1399,11 +1428,13 @@ solve();
                         const finalScore = (session.analysis && session.analysis.final_score !== undefined) ? session.analysis.final_score : 0;
                         if (typeof Toast !== 'undefined') Toast.success(`Verdict reached! Score: ${finalScore}/100`);
                     } else if (session.status === 'dry_run_failed') {
-                        if (session.dry_run) {
+                        if (session.test_results && session.test_results.length > 0) {
+                            this._renderTestResults(session.test_results);
+                        } else if (session.dry_run) {
                             this._renderDryRun(session.dry_run);
                         }
                         this.switchConsoleTab('test-result');
-                        if (typeof Toast !== 'undefined') Toast.error('Dry run failed. Fix syntax/runtime errors and resubmit.');
+                        if (typeof Toast !== 'undefined') Toast.error('Evaluation halted on test cases. Fix issues and resubmit.');
                     } else {
                         this._renderFailure(session);
                         this.switchConsoleTab('analysis');
@@ -1415,6 +1446,14 @@ solve();
                 }
             } catch (err) {
                 console.error('[SessionView] Poll error:', err);
+                consecutiveErrors++;
+                if (consecutiveErrors >= 5) {
+                    clearInterval(this._activePollInterval);
+                    this._activePollInterval = null;
+                    this._hidePipelineRunning();
+                    this._resetSubmitButtons();
+                    if (typeof Toast !== 'undefined') Toast.error('Lost connection while polling evaluation status. Please refresh.');
+                }
             }
         }, 1800);
     },

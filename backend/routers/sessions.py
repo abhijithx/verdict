@@ -12,6 +12,7 @@ to track progress through the pipeline stages.
 """
 
 import asyncio
+from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -154,10 +155,19 @@ async def dry_run_session(
 
     in_flight_statuses = {"generating_tests", "executing", "analyzing"}
     if session.status in in_flight_statuses:
-        raise HTTPException(
-            status_code=409,
-            detail=f"Session pipeline is currently running ({session.status}). Wait for completion."
-        )
+        now = datetime.now(timezone.utc)
+        up_at = session.updated_at
+        if up_at and up_at.tzinfo is None:
+            up_at = up_at.replace(tzinfo=timezone.utc)
+        if up_at and (now - up_at) < timedelta(seconds=60):
+            raise HTTPException(
+                status_code=409,
+                detail=f"Session pipeline is currently running ({session.status}). Wait for completion."
+            )
+        # Stale in-flight status from previous interrupted run: auto-recover
+        session.status = "draft"
+        session.updated_at = now
+        await db.commit()
 
     session.code = submission.code
     if submission.language:
@@ -325,6 +335,7 @@ async def dry_run_session(
     db.add(dry_run_record)
 
     session.status = "dry_run_passed" if passed else "dry_run_failed"
+    session.updated_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(dry_run_record)
 
@@ -365,12 +376,13 @@ async def run_session_tests(
         err_msg = "Error: No executable code provided. Please implement your solution before running."
         return RunTestsResponse(
             passed=False,
+            total=1,
             passed_count=0,
-            total_count=1,
+            failed_count=1,
             time_ms=0.0,
             error_line=None,
             stderr=err_msg,
-            test_results=[
+            results=[
                 TestResultDetail(
                     test_case_id="Case 1",
                     description="Code Validation",
@@ -498,24 +510,22 @@ async def submit_session(
             detail="Cannot submit empty code. Please implement your solution before submitting."
         )
 
-    # Atomic check & update: don't allow re-submission while in-flight pipeline steps are actively running
+    # Check & update: don't allow duplicate submissions while in-flight pipeline steps are actively running
     in_flight_statuses = ["generating_tests", "executing", "analyzing"]
-    from sqlalchemy import update
-    res = await db.execute(
-        update(Session)
-        .where(
-            Session.session_id == session_id,
-            Session.status.notin_(in_flight_statuses)
-        )
-        .values(status="pending")
-    )
-    if res.rowcount == 0:
+    now = datetime.now(timezone.utc)
+    up_at = session.updated_at
+    if up_at and up_at.tzinfo is None:
+        up_at = up_at.replace(tzinfo=timezone.utc)
+
+    if session.status in in_flight_statuses and up_at and (now - up_at) < timedelta(seconds=60):
         raise HTTPException(
             status_code=409,
             detail=f"Session is busy or currently running ({session.status}). Wait for completion."
         )
 
-    # Refresh session so in-memory object matches DB after atomic update
+    session.status = "pending"
+    session.updated_at = now
+    await db.commit()
     await db.refresh(session)
 
     # For resubmissions: compress prior analysis into history summary
@@ -603,6 +613,18 @@ async def get_session(
     session = result.scalars().first()
     if not session:
         raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+
+    # Auto-recover stale in-flight sessions so frontend never gets permanently stuck
+    in_flight_statuses = {"generating_tests", "executing", "analyzing", "pending"}
+    if session.status in in_flight_statuses:
+        now = datetime.now(timezone.utc)
+        up_at = session.updated_at
+        if up_at and up_at.tzinfo is None:
+            up_at = up_at.replace(tzinfo=timezone.utc)
+        if up_at and (now - up_at) > timedelta(seconds=90):
+            session.status = "failed"
+            session.history_summary = "Evaluation timed out. Please retry submission."
+            await db.commit()
 
     # Load related problem
     prob_result = await db.execute(

@@ -115,3 +115,83 @@ async def test_leetcode_import_and_session_creation():
         sess_detail = sess_detail_res.json()
         assert sess_detail["session_id"] == sess_id
         assert len(sess_detail["test_cases"]) == len(test_cases)
+
+
+@pytest.mark.asyncio
+async def test_leetcode_multi_language_execution():
+    """Verify LeetCode class Solution and functions execute seamlessly across Python, JS, Java, and C++."""
+    from pipeline.code_runner import code_runner
+
+    stdin_input = "nums = [2,7,11,15], target = 9"
+    expected = "[0, 1]"
+
+    # 1. Python
+    py_code = """
+class Solution:
+    def twoSum(self, nums: list[int], target: int) -> list[int]:
+        d = {}
+        for i, n in enumerate(nums):
+            if target - n in d:
+                return [d[target - n], i]
+            d[n] = i
+        return []
+"""
+    res_py = await code_runner.run_test(py_code, "python", 1, stdin_input, expected)
+    assert res_py.passed is True
+
+    # 2. JavaScript
+    js_code = """
+var twoSum = function(nums, target) {
+    const map = new Map();
+    for (let i = 0; i < nums.length; i++) {
+        const diff = target - nums[i];
+        if (map.has(diff)) return [map.get(diff), i];
+        map.set(nums[i], i);
+    }
+    return [];
+};
+"""
+    res_js = await code_runner.run_test(js_code, "javascript", 1, stdin_input, expected)
+    assert res_js.passed is True
+
+    # 3. Java
+    java_code = """
+import java.util.*;
+
+class Solution {
+    public int[] twoSum(int[] nums, int target) {
+        Map<Integer, Integer> map = new HashMap<>();
+        for (int i = 0; i < nums.length; i++) {
+            int comp = target - nums[i];
+            if (map.containsKey(comp)) return new int[] { map.get(comp), i };
+            map.put(nums[i], i);
+        }
+        return new int[0];
+    }
+}
+"""
+    res_java = await code_runner.run_test(java_code, "java", 1, stdin_input, expected)
+    assert res_java.passed is True
+
+    # 4. C++
+    cpp_code = """
+#include <vector>
+#include <unordered_map>
+using namespace std;
+
+class Solution {
+public:
+    vector<int> twoSum(vector<int>& nums, int target) {
+        unordered_map<int, int> mp;
+        for (int i = 0; i < nums.size(); ++i) {
+            int comp = target - nums[i];
+            if (mp.count(comp)) return {mp[comp], i};
+            mp[nums[i]] = i;
+        }
+        return {};
+    }
+};
+"""
+    res_cpp = await code_runner.run_test(cpp_code, "cpp", 1, stdin_input, expected)
+    assert res_cpp.passed is True
+

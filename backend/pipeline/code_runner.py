@@ -50,99 +50,398 @@ class TestExecutionResult:
     time_ms: float = 0.0
 
 
+PYTHON_PREAMBLE = r'''import sys, os, math, collections, heapq, bisect, itertools, functools, re, json, ast, inspect
+from collections import defaultdict, deque, Counter
+from typing import List, Dict, Tuple, Set, Optional, Any, Union
+
+class ListNode:
+    def __init__(self, val=0, next=None):
+        self.val = val
+        self.next = next
+
+class TreeNode:
+    def __init__(self, val=0, left=None, right=None):
+        self.val = val
+        self.left = left
+        self.right = right
+'''
+
 PYTHON_LEETCODE_HARNESS = r'''
-# --- Automatic Verdict AI LeetCode Runner Harness ---
+# --- Automatic Verdict AI LeetCode Runner Harness (Python) ---
 if __name__ == "__main__":
-    import sys, json, ast, inspect
+    import sys, json, ast, inspect, re
 
     def _verdict_run():
         raw_input = sys.stdin.read()
-        if "Solution" not in globals():
-            return
-        sol_cls = globals()["Solution"]
-        sol = sol_cls()
-        methods = [m for m in dir(sol) if not m.startswith("_") and callable(getattr(sol, m))]
-        if not methods:
-            return
-        func = getattr(sol, methods[0])
-        sig = inspect.signature(func)
-        params = list(sig.parameters.values())
-
-        def _parse_val(val_str, expected_type=None, param_name=""):
-            val_str = (val_str or "").strip()
-            is_list = False
-            if expected_type and any(t in str(expected_type).lower() for t in ("list", "sequence", "iterable")):
-                is_list = True
-            elif param_name.lower() in ("nums", "candidates", "arr", "array", "nodes", "points", "matrix", "grid", "vals", "digits"):
-                is_list = True
-
-            if not val_str:
-                return [] if is_list else None
-
-            # Handle param = value
-            if "=" in val_str and not val_str.startswith("{"):
-                parts = val_str.split("=", 1)
-                val_str = parts[1].strip()
-
-            parsed = None
+        func = None
+        target_obj = None
+        if "Solution" in globals():
             try:
-                parsed = ast.literal_eval(val_str)
+                target_obj = globals()["Solution"]()
+                methods = [m for m in dir(target_obj) if not m.startswith("_") and callable(getattr(target_obj, m))]
+                if methods:
+                    func = getattr(target_obj, methods[0])
             except Exception:
                 pass
+        if not func:
+            for k, v in list(globals().items()):
+                if inspect.isfunction(v) and not k.startswith("_") and k not in ("ListNode", "TreeNode") and v.__module__ == "__main__":
+                    func = v
+                    break
+        if not func:
+            return
 
-            if parsed is None:
-                # Try splitting by space
-                tokens = val_str.split()
-                if len(tokens) > 1:
-                    try:
-                        parsed = [int(t) for t in tokens]
-                    except ValueError:
-                        try:
-                            parsed = [float(t) for t in tokens]
-                        except ValueError:
-                            parsed = tokens
-                elif len(tokens) == 1:
-                    try:
-                        parsed = int(tokens[0])
-                    except ValueError:
-                        try:
-                            parsed = float(tokens[0])
-                        except ValueError:
-                            parsed = tokens[0]
+        sig = inspect.signature(func)
+        params = [p for p in sig.parameters.values() if p.name != "self"]
+        if not raw_input.strip() and len(params) > 0:
+            return
+
+        def _parse_single(s, p):
+            s = (s or "").strip()
+            if not s:
+                return None
+            if "=" in s and not s.startswith("{"):
+                s = s.split("=", 1)[1].strip()
+            val = None
+            for parser in (json.loads, ast.literal_eval):
+                try:
+                    val = parser(s)
+                    break
+                except Exception:
+                    pass
+            if val is None:
+                s_lower = s.lower()
+                if s_lower == "true": val = True
+                elif s_lower == "false": val = False
+                elif s_lower == "null": val = None
                 else:
-                    parsed = val_str
+                    try: val = int(s)
+                    except ValueError:
+                        try: val = float(s)
+                        except ValueError: val = s
 
-            if is_list and not isinstance(parsed, list):
-                parsed = [parsed] if parsed is not None else []
-            return parsed
+            ann = str(p.annotation).lower()
+            p_name = p.name.lower()
+            if ("listnode" in ann or "head" in p_name) and isinstance(val, list) and "ListNode" in globals():
+                LN = globals()["ListNode"]
+                dummy = LN(0)
+                curr = dummy
+                for x in val:
+                    curr.next = LN(x)
+                    curr = curr.next
+                return dummy.next
 
-        raw_lines = [l.strip() for l in raw_input.splitlines()]
-        non_empty = [l for l in raw_lines if l]
+            if ("treenode" in ann or "root" in p_name) and isinstance(val, list) and "TreeNode" in globals():
+                TN = globals()["TreeNode"]
+                if not val or val[0] is None:
+                    return None
+                root = TN(val[0])
+                queue = [root]
+                idx = 1
+                while queue and idx < len(val):
+                    node = queue.pop(0)
+                    if idx < len(val) and val[idx] is not None:
+                        node.left = TN(val[idx])
+                        queue.append(node.left)
+                    idx += 1
+                    if idx < len(val) and val[idx] is not None:
+                        node.right = TN(val[idx])
+                        queue.append(node.right)
+                    idx += 1
+                return root
+
+            return val
+
+        named = {}
+        for p in params:
+            pat = r'(?:^|[\n,;])\s*' + re.escape(p.name) + r'\s*=\s*(.*?)(?=(?:[\n,;]\s*[a-zA-Z_]\w*\s*=)|\Z)'
+            m = re.search(pat, raw_input, re.DOTALL)
+            if m:
+                named[p.name] = m.group(1).strip()
 
         args = []
-        if len(non_empty) == len(params):
-            for line, param in zip(non_empty, params):
-                args.append(_parse_val(line, param.annotation, param.name))
-        elif len(raw_lines) == len(params):
-            for line, param in zip(raw_lines, params):
-                args.append(_parse_val(line, param.annotation, param.name))
+        if len(named) == len(params):
+            args = [_parse_single(named[p.name], p) for p in params]
         else:
-            for i, param in enumerate(params):
-                if i < len(non_empty):
-                    args.append(_parse_val(non_empty[i], param.annotation, param.name))
-                else:
-                    args.append(_parse_val("", param.annotation, param.name))
+            lines = [l.strip() for l in raw_input.splitlines() if l.strip()]
+            if len(lines) == len(params):
+                args = [_parse_single(lines[i], p) for i, p in enumerate(params)]
+            else:
+                for i, p in enumerate(params):
+                    val_str = lines[i] if i < len(lines) else ""
+                    args.append(_parse_single(val_str, p))
 
         try:
             res = func(*args)
-            if isinstance(res, (list, dict, bool, int, float, str)) or res is None:
-                print(json.dumps(res))
-            else:
-                print(res)
+            if res is None and len(args) > 0 and isinstance(args[0], (list, dict)):
+                res = args[0]
         except Exception as e:
-            print(f"Runtime error in {methods[0]}: {e}", file=sys.stderr)
+            print(f"Runtime error in {func.__name__}: {e}", file=sys.stderr)
+            sys.exit(1)
+
+        def _serialize(v):
+            if v is None:
+                return "null"
+            if isinstance(v, bool):
+                return "true" if v else "false"
+            if "ListNode" in globals() and isinstance(v, globals()["ListNode"]):
+                vals = []
+                c = v
+                while c:
+                    vals.append(c.val)
+                    c = c.next
+                return json.dumps(vals)
+            if "TreeNode" in globals() and isinstance(v, globals()["TreeNode"]):
+                vals = []
+                q = [v]
+                while q:
+                    curr = q.pop(0)
+                    if curr:
+                        vals.append(curr.val)
+                        q.append(curr.left)
+                        q.append(curr.right)
+                    else:
+                        vals.append(None)
+                while vals and vals[-1] is None:
+                    vals.pop()
+                return json.dumps(vals)
+            if isinstance(v, (list, dict, int, float, str)):
+                return json.dumps(v)
+            return str(v)
+
+        print(_serialize(res))
 
     _verdict_run()
+'''
+
+JS_LEETCODE_HARNESS = r'''
+// --- Automatic Verdict AI LeetCode Runner Harness (Node.js) ---
+(function() {
+    const fs = require('fs');
+    let rawInput = '';
+    try { rawInput = fs.readFileSync(0, 'utf-8'); } catch(e) {}
+    rawInput = (rawInput || '').trim();
+
+    let fn = null;
+    let targetObj = null;
+    if (typeof Solution !== 'undefined') {
+        try {
+            targetObj = new Solution();
+            const proto = Object.getPrototypeOf(targetObj);
+            const methods = Object.getOwnPropertyNames(proto).filter(m => m !== 'constructor' && typeof targetObj[m] === 'function');
+            if (methods.length > 0) fn = targetObj[methods[0]].bind(targetObj);
+        } catch(e) {}
+    }
+    if (!fn) {
+        const candidates = ['twoSum', 'solve', 'isValid', 'mergeTwoLists', 'maxSubArray', 'lengthOfLongestSubstring', 'solution', 'climbStairs', 'coinChange', 'search', 'reverseString', 'moveZeroes'];
+        for (const name of candidates) {
+            try {
+                if (eval('typeof ' + name) === 'function') {
+                    fn = eval(name);
+                    break;
+                }
+            } catch(e) {}
+        }
+    }
+    if (!fn) return;
+
+    if (!rawInput.trim() && fn.length > 0) return;
+
+    function parseVal(s) {
+        s = (s || '').trim();
+        if (!s) return null;
+        if (s.includes('=') && !s.startsWith('{')) {
+            s = s.substring(s.indexOf('=') + 1).trim();
+        }
+        try { return JSON.parse(s); } catch(e) {}
+        if (s.toLowerCase() === 'true') return true;
+        if (s.toLowerCase() === 'false') return false;
+        if (s.toLowerCase() === 'null') return null;
+        const num = Number(s);
+        if (!isNaN(num) && s !== '') return num;
+        return s;
+    }
+
+    let args = [];
+    const assignmentRegex = /(?:^|[\n,;])\s*([a-zA-Z_]\w*)\s*=\s*(.*?)(?=(?:[\n,;]\s*[a-zA-Z_]\w*\s*=)|$)/g;
+    const matches = [...rawInput.matchAll(assignmentRegex)];
+    if (matches.length > 0 && matches.length === fn.length) {
+        args = matches.map(m => parseVal(m[2]));
+    } else {
+        const lines = rawInput.split('\n').map(l => l.trim()).filter(l => l);
+        if (lines.length === fn.length) {
+            args = lines.map(parseVal);
+        } else if (matches.length > 0) {
+            args = matches.map(m => parseVal(m[2]));
+        } else {
+            args = lines.map(parseVal);
+        }
+    }
+
+    try {
+        let res = fn(...args);
+        if (res === undefined && args.length > 0 && typeof args[0] === 'object') {
+            res = args[0];
+        }
+        if (res !== undefined) {
+            console.log(JSON.stringify(res));
+        }
+    } catch(err) {
+        console.error('Runtime error in solution: ' + err.message);
+        process.exit(1);
+    }
+})();
+'''
+
+JAVA_LEETCODE_RUNNER = r'''
+class Main {
+    public static void main(String[] args) throws Exception {
+        BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+        StringBuilder sb = new StringBuilder();
+        String line;
+        while ((line = reader.readLine()) != null) {
+            sb.append(line).append("\n");
+        }
+        String raw = sb.toString().trim();
+        if (raw.isEmpty()) return;
+
+        Class<?> solClass = Class.forName("Solution");
+        Object solInstance = solClass.getDeclaredConstructor().newInstance();
+        Method target = null;
+        for (Method m : solClass.getDeclaredMethods()) {
+            if (Modifier.isPublic(m.getModifiers()) && !m.getName().startsWith("_")) {
+                target = m;
+                break;
+            }
+        }
+        if (target == null) return;
+
+        Class<?>[] pTypes = target.getParameterTypes();
+        Object[] invokeArgs = new Object[pTypes.length];
+
+        List<String> rawParts = new ArrayList<>();
+        Matcher assignMatcher = Pattern.compile("(?:^|[\\n,;])\\s*[a-zA-Z_]\\w*\\s*=\\s*(.*?)(?=(?:[\\n,;]\\s*[a-zA-Z_]\\w*\\s*=)|$)").matcher(raw);
+        while (assignMatcher.find()) {
+            rawParts.add(assignMatcher.group(1).trim());
+        }
+        if (rawParts.size() != pTypes.length) {
+            rawParts.clear();
+            for (String l : raw.split("\n")) {
+                String trimmed = l.trim();
+                if (!trimmed.isEmpty()) rawParts.add(trimmed);
+            }
+        }
+
+        for (int i = 0; i < pTypes.length; i++) {
+            String part = i < rawParts.size() ? rawParts.get(i) : "";
+            if (part.contains("=") && !part.startsWith("{")) {
+                part = part.substring(part.indexOf('=') + 1).trim();
+            }
+            Class<?> pt = pTypes[i];
+            if (pt == int[].class) {
+                Matcher nm = Pattern.compile("-?\\d+").matcher(part);
+                List<Integer> list = new ArrayList<>();
+                while (nm.find()) list.add(Integer.parseInt(nm.group()));
+                int[] arr = new int[list.size()];
+                for (int j = 0; j < list.size(); j++) arr[j] = list.get(j);
+                invokeArgs[i] = arr;
+            } else if (pt == int.class || pt == Integer.class) {
+                Matcher nm = Pattern.compile("-?\\d+").matcher(part);
+                invokeArgs[i] = nm.find() ? Integer.parseInt(nm.group()) : 0;
+            } else if (pt == long.class || pt == Long.class) {
+                Matcher nm = Pattern.compile("-?\\d+").matcher(part);
+                invokeArgs[i] = nm.find() ? Long.parseLong(nm.group()) : 0L;
+            } else if (pt == double.class || pt == Double.class) {
+                Matcher nm = Pattern.compile("-?\\d+(?:\\.\\d+)?").matcher(part);
+                invokeArgs[i] = nm.find() ? Double.parseDouble(nm.group()) : 0.0;
+            } else if (pt == String[].class) {
+                Matcher sm = Pattern.compile("\"([^\"]*)\"").matcher(part);
+                List<String> list = new ArrayList<>();
+                while (sm.find()) list.add(sm.group(1));
+                invokeArgs[i] = list.toArray(new String[0]);
+            } else if (pt == String.class) {
+                if (part.startsWith("\"") && part.endsWith("\"") && part.length() >= 2) {
+                    part = part.substring(1, part.length() - 1);
+                }
+                invokeArgs[i] = part;
+            } else if (pt == boolean.class || pt == Boolean.class) {
+                invokeArgs[i] = part.toLowerCase().contains("true");
+            } else if (pt == char[].class) {
+                Matcher sm = Pattern.compile("\"([^\"]*)\"").matcher(part);
+                if (sm.find()) {
+                    invokeArgs[i] = sm.group(1).toCharArray();
+                } else {
+                    Matcher cm = Pattern.compile("'([^']*)'").matcher(part);
+                    List<Character> list = new ArrayList<>();
+                    while (cm.find()) if (cm.group(1).length() > 0) list.add(cm.group(1).charAt(0));
+                    char[] arr = new char[list.size()];
+                    for (int j = 0; j < list.size(); j++) arr[j] = list.get(j);
+                    invokeArgs[i] = arr;
+                }
+            } else if (pt == char.class || pt == Character.class) {
+                Matcher cm = Pattern.compile("['\"]([^'\"]*)['\"]").matcher(part);
+                invokeArgs[i] = cm.find() && cm.group(1).length() > 0 ? cm.group(1).charAt(0) : (part.isEmpty() ? ' ' : part.charAt(0));
+            } else if (pt == int[][].class) {
+                Matcher sub = Pattern.compile("\\[([^\\[\\]]*)\\]").matcher(part);
+                List<int[]> rows = new ArrayList<>();
+                while (sub.find()) {
+                    String inner = sub.group(1);
+                    Matcher nm = Pattern.compile("-?\\d+").matcher(inner);
+                    List<Integer> row = new ArrayList<>();
+                    while (nm.find()) row.add(Integer.parseInt(nm.group()));
+                    int[] rArr = new int[row.size()];
+                    for (int j = 0; j < row.size(); j++) rArr[j] = row.get(j);
+                    rows.add(rArr);
+                }
+                invokeArgs[i] = rows.toArray(new int[0][]);
+            } else if (pt == List.class) {
+                Matcher sm = Pattern.compile("\"([^\"]*)\"").matcher(part);
+                List<String> sList = new ArrayList<>();
+                while (sm.find()) sList.add(sm.group(1));
+                if (!sList.isEmpty()) {
+                    invokeArgs[i] = sList;
+                } else {
+                    Matcher nm = Pattern.compile("-?\\d+").matcher(part);
+                    List<Integer> iList = new ArrayList<>();
+                    while (nm.find()) iList.add(Integer.parseInt(nm.group()));
+                    invokeArgs[i] = iList;
+                }
+            } else {
+                invokeArgs[i] = null;
+            }
+        }
+
+        Object result = target.invoke(solInstance, invokeArgs);
+        if (target.getReturnType() == void.class) {
+            if (invokeArgs.length > 0 && invokeArgs[0] != null) {
+                result = invokeArgs[0];
+            }
+        }
+        if (result == null) {
+            System.out.println("null");
+        } else if (result instanceof int[]) {
+            System.out.println(Arrays.toString((int[]) result));
+        } else if (result instanceof long[]) {
+            System.out.println(Arrays.toString((long[]) result));
+        } else if (result instanceof double[]) {
+            System.out.println(Arrays.toString((double[]) result));
+        } else if (result instanceof boolean[]) {
+            System.out.println(Arrays.toString((boolean[]) result));
+        } else if (result instanceof char[]) {
+            System.out.println(Arrays.toString((char[]) result));
+        } else if (result instanceof int[][]) {
+            System.out.println(Arrays.deepToString((int[][]) result));
+        } else if (result instanceof char[][]) {
+            System.out.println(Arrays.deepToString((char[][]) result));
+        } else if (result instanceof Object[]) {
+            System.out.println(Arrays.deepToString((Object[]) result));
+        } else if (result instanceof String) {
+            System.out.println("\"" + result.toString() + "\"");
+        } else {
+            System.out.println(result.toString());
+        }
+    }
+}
 '''
 
 
@@ -346,7 +645,10 @@ class LocalRunner:
         """
         Compile code or perform pre-flight syntax check. Returns (success, stdout, stderr, error_line).
         """
-        from pipeline.error_parser import parse_error_line
+        try:
+            from pipeline.error_parser import parse_error_line
+        except ImportError:
+            from backend.pipeline.error_parser import parse_error_line
 
         lang = language.lower()
 
@@ -361,13 +663,15 @@ class LocalRunner:
                 err_msg = f"SyntaxError: {se.msg} (line {se.lineno})"
                 return False, "", err_msg, se.lineno
 
-            # Check if user provided LeetCode-style `class Solution` without a driver
+            # Check if user provided LeetCode-style Solution class or function without a driver
             has_solution_class = bool(re.search(r'^\s*class\s+Solution\b', code, re.MULTILINE))
+            has_func = bool(re.search(r'^\s*def\s+[a-zA-Z_]\w*\s*\(', code, re.MULTILINE))
             has_main_driver = ("__main__" in code) or ("sys.stdin" in code) or ("input(" in code)
 
-            full_code = code
-            if has_solution_class and not has_main_driver:
-                full_code = code + "\n\n" + PYTHON_LEETCODE_HARNESS
+            if (has_solution_class or has_func) and not has_main_driver:
+                full_code = PYTHON_PREAMBLE + "\n\n" + code + "\n\n" + PYTHON_LEETCODE_HARNESS
+            else:
+                full_code = PYTHON_PREAMBLE + "\n\n" + code
 
             with open(filepath, "w", encoding="utf-8") as f:
                 f.write(full_code)
@@ -377,8 +681,15 @@ class LocalRunner:
         elif lang in ("javascript", "js", "node"):
             filename = "main.js"
             filepath = os.path.join(work_dir, filename)
+
+            has_main_driver = ("fs.readFileSync" in code) or ("process.stdin" in code) or ("readline" in code)
+            full_code = code
+            if not has_main_driver:
+                full_code = code + "\n\n" + JS_LEETCODE_HARNESS
+
             with open(filepath, "w", encoding="utf-8") as f:
-                f.write(code)
+                f.write(full_code)
+
             node = cls._find_compiler("node") or "node"
             # Syntax validation via node --check
             rc, stdout, stderr, _ = await asyncio.to_thread(
@@ -392,8 +703,209 @@ class LocalRunner:
         elif lang in ("cpp", "c++", "c"):
             src_path = os.path.join(work_dir, "main.cpp")
             exe_path = os.path.join(work_dir, "main.exe" if sys.platform == "win32" else "main")
+
+            has_main = bool(re.search(r'\bint\s+main\b|\bvoid\s+main\b', code))
+            has_solution = bool(re.search(r'class\s+Solution\b', code))
+
+            full_code = code
+            if not has_main and has_solution:
+                # Helper to build LeetCode runner for Solution method
+                m = re.search(r'class\s+Solution\b[^{]*\{.*?public:\s*([\w:<>]+(?:\s*[*&])?)\s+(\w+)\s*\(([^)]*)\)', code, re.DOTALL)
+                if m:
+                    ret_type, method_name, params_str = m.groups()
+                    raw_params = [p.strip() for p in params_str.split(",") if p.strip()]
+
+                    cpp_driver = [
+                        "\n// --- Automatic Verdict AI LeetCode Runner Harness (C++) ---",
+                        "#include <iostream>",
+                        "#include <vector>",
+                        "#include <string>",
+                        "#include <sstream>",
+                        "#include <regex>",
+                        "#include <map>",
+                        "#include <unordered_map>",
+                        "#include <algorithm>",
+                        "",
+                        r'static std::vector<int> _read_vector_int(const std::string& raw) {',
+                        r'    std::vector<int> res;',
+                        r'    std::regex num_re(R"(-?\d+)");',
+                        r'    std::sregex_iterator next(raw.begin(), raw.end(), num_re);',
+                        r'    std::sregex_iterator end;',
+                        r'    while (next != end) { res.push_back(std::stoi(next->str())); next++; }',
+                        r'    return res;',
+                        r'}',
+                        r'',
+                        r'static std::vector<std::string> _read_vector_str(const std::string& raw) {',
+                        r'    std::vector<std::string> res;',
+                        r'    std::regex str_re(R"delim(\"([^\"]*)\")delim");',
+                        r'    std::sregex_iterator next(raw.begin(), raw.end(), str_re);',
+                        r'    std::sregex_iterator end;',
+                        r'    while (next != end) { res.push_back((*next)[1].str()); next++; }',
+                        r'    return res;',
+                        r'}',
+                        r'',
+                        r'static std::vector<std::vector<int>> _read_vector_vector_int(const std::string& raw) {',
+                        r'    std::vector<std::vector<int>> res;',
+                        r'    std::regex sub_re(R"delim(\[([^\[\]]*)\])delim");',
+                        r'    std::sregex_iterator next(raw.begin(), raw.end(), sub_re);',
+                        r'    std::sregex_iterator end;',
+                        r'    while (next != end) {',
+                        r'        std::string inner = (*next)[1].str();',
+                        r'        std::vector<int> row;',
+                        r'        std::regex num_re(R"delim(-?\d+)delim");',
+                        r'        std::sregex_iterator it(inner.begin(), inner.end(), num_re);',
+                        r'        while (it != end) { row.push_back(std::stoi(it->str())); it++; }',
+                        r'        res.push_back(row);',
+                        r'        next++;',
+                        r'    }',
+                        r'    return res;',
+                        r'}',
+                        r'',
+                        r'static int _read_int(const std::string& raw) {',
+                        r'    std::regex num_re(R"delim(-?\d+)delim");',
+                        r'    std::smatch m;',
+                        r'    if (std::regex_search(raw, m, num_re)) return std::stoi(m.str());',
+                        r'    return 0;',
+                        r'}',
+                        r'',
+                        r'static double _read_double(const std::string& raw) {',
+                        r'    std::regex num_re(R"delim(-?\d+(?:\.\d+)?)delim");',
+                        r'    std::smatch m;',
+                        r'    if (std::regex_search(raw, m, num_re)) return std::stod(m.str());',
+                        r'    return 0.0;',
+                        r'}',
+                        r'',
+                        r'static bool _read_bool(const std::string& raw) {',
+                        r'    return raw.find("true") != std::string::npos || raw.find("True") != std::string::npos;',
+                        r'}',
+                        r'',
+                        r'static char _read_char(const std::string& raw) {',
+                        r'    for (char c : raw) {',
+                        r"        if (c != '\'' && c != '\"' && c != ' ' && c != '\t') return c;",
+                        r'    }',
+                        r"    return ' ';",
+                        r'}',
+                        r'',
+                        r'static std::vector<char> _read_vector_char(const std::string& raw) {',
+                        r'    std::vector<char> res;',
+                        r'    for (char c : raw) {',
+                        r"        if (c != '[' && c != ']' && c != ',' && c != '\'' && c != '\"' && c != ' ' && c != '\t' && c != '\n') {",
+                        r'            res.push_back(c);',
+                        r'        }',
+                        r'    }',
+                        r'    return res;',
+                        r'}',
+                        r'',
+                        r'static std::string _read_str(const std::string& raw) {',
+                        r'    std::string s = raw;',
+                        r"    while (!s.empty() && (s.front() == ' ' || s.front() == '\t')) s.erase(s.begin());",
+                        r"    while (!s.empty() && (s.back() == ' ' || s.back() == '\t' || s.back() == '\n' || s.back() == '\r')) s.pop_back();",
+                        r"    if (s.size() >= 2 && ((s.front() == '\"' && s.back() == '\"') || (s.front() == '\'' && s.back() == '\''))) {",
+                        r'        return s.substr(1, s.size() - 2);',
+                        r'    }',
+                        r'    return s;',
+                        r'}',
+                        r'',
+                        r'template<typename T>',
+                        r'static void _print_res(const std::vector<T>& v) {',
+                        r'    std::cout << "[";',
+                        r'    for (size_t i = 0; i < v.size(); i++) {',
+                        r'        if (i > 0) std::cout << ", ";',
+                        r'        std::cout << v[i];',
+                        r'    }',
+                        r'    std::cout << "]\n";',
+                        r'}',
+                        r'',
+                        r'template<typename T>',
+                        r'static void _print_res(const std::vector<std::vector<T>>& mat) {',
+                        r'    std::cout << "[";',
+                        r'    for (size_t i = 0; i < mat.size(); i++) {',
+                        r'        if (i > 0) std::cout << ", ";',
+                        r'        std::cout << "[";',
+                        r'        for (size_t j = 0; j < mat[i].size(); j++) {',
+                        r'            if (j > 0) std::cout << ", ";',
+                        r'            std::cout << mat[i][j];',
+                        r'        }',
+                        r'        std::cout << "]";',
+                        r'    }',
+                        r'    std::cout << "]\n";',
+                        r'}',
+                        r'',
+                        r'static void _print_res(bool b) {',
+                        r'    std::cout << (b ? "true" : "false") << "\n";',
+                        r'}',
+                        r'',
+                        r'static void _print_res(const std::string& s) {',
+                        r'    std::cout << "\"" << s << "\"\n";',
+                        r'}',
+                        r'',
+                        r'static void _print_res(char c) {',
+                        r'    std::cout << "\"" << c << "\"\n";',
+                        r'}',
+                        r'',
+                        r'template<typename T>',
+                        r'static void _print_res(const T& val) {',
+                        r'    std::cout << val << "\n";',
+                        r'}',
+                        r'',
+                        r'int main() {',
+                        r'    std::ios_base::sync_with_stdio(false);',
+                        r'    std::cin.tie(NULL);',
+                        r'    std::string raw((std::istreambuf_iterator<char>(std::cin)), std::istreambuf_iterator<char>());',
+                        r"    while (!raw.empty() && (raw.back() == '\n' || raw.back() == '\r' || raw.back() == ' ' || raw.back() == '\t')) raw.pop_back();",
+                        r'    if (raw.empty()) return 0;',
+                        r'    std::regex assign_re(R"delim((?:^|[\n,;])\s*[a-zA-Z_]\w*\s*=\s*(.*?)(?=(?:[\n,;]\s*[a-zA-Z_]\w*\s*=)|$))delim");',
+                        r'    std::sregex_iterator it(raw.begin(), raw.end(), assign_re);',
+                        r'    std::sregex_iterator end;',
+                        r'    std::vector<std::string> parts;',
+                        r'    while (it != end) { parts.push_back(it->str(1)); it++; }',
+                        r'    if (parts.empty()) {',
+                        r'        std::stringstream ss(raw);',
+                        r'        std::string l;',
+                        r'        while (std::getline(ss, l)) if (!l.empty()) parts.push_back(l);',
+                        r'    }'
+                    ]
+                    call_args = []
+                    for idx, param in enumerate(raw_params):
+                        param_clean = param.strip()
+                        p_var = f"arg_{idx}"
+                        p_str = f"parts.size() > {idx} ? parts[{idx}] : \"\""
+                        if "vector<vector<int>>" in param_clean or "vector<vector<int> >" in param_clean:
+                            cpp_driver.append(f"    auto {p_var} = _read_vector_vector_int({p_str});")
+                        elif "vector<string>" in param_clean or "vector<std::string>" in param_clean:
+                            cpp_driver.append(f"    auto {p_var} = _read_vector_str({p_str});")
+                        elif "vector<int>" in param_clean:
+                            cpp_driver.append(f"    auto {p_var} = _read_vector_int({p_str});")
+                        elif "vector<char>" in param_clean:
+                            cpp_driver.append(f"    auto {p_var} = _read_vector_char({p_str});")
+                        elif "string" in param_clean:
+                            cpp_driver.append(f"    auto {p_var} = _read_str({p_str});")
+                        elif "char" in param_clean:
+                            cpp_driver.append(f"    auto {p_var} = _read_char({p_str});")
+                        elif "bool" in param_clean:
+                            cpp_driver.append(f"    auto {p_var} = _read_bool({p_str});")
+                        elif "double" in param_clean or "float" in param_clean:
+                            cpp_driver.append(f"    auto {p_var} = _read_double({p_str});")
+                        elif "int" in param_clean or "long" in param_clean:
+                            cpp_driver.append(f"    auto {p_var} = _read_int({p_str});")
+                        else:
+                            cpp_driver.append(f"    auto {p_var} = _read_int({p_str});")
+                        call_args.append(p_var)
+
+                    cpp_driver.append(f"    Solution sol;")
+                    if ret_type.strip() == "void":
+                        cpp_driver.append(f"    sol.{method_name}({', '.join(call_args)});")
+                        if len(call_args) > 0:
+                            cpp_driver.append(f"    _print_res(arg_0);")
+                    else:
+                        cpp_driver.append(f"    auto res = sol.{method_name}({', '.join(call_args)});")
+                        cpp_driver.append(f"    _print_res(res);")
+                    cpp_driver.append(f"    return 0;")
+                    cpp_driver.append("}")
+                    full_code = code + "\n\n" + "\n".join(cpp_driver)
+
             with open(src_path, "w", encoding="utf-8") as f:
-                f.write(code)
+                f.write(full_code)
 
             compiler = cls._find_compiler("g++") or cls._find_compiler("clang++") or "g++"
             compile_cmd = [compiler, "-O2", "-std=c++17", src_path, "-o", exe_path]
@@ -408,21 +920,37 @@ class LocalRunner:
             # 1. Clean up package statement if present (causes classloader path mismatch in flat dir)
             clean_code = re.sub(r'^\s*package\s+[^;]+;', '// package stripped', code, flags=re.MULTILINE)
 
-            # 2. Look for class containing main method first, then public class, then any class
-            main_match = re.search(r'class\s+([A-Za-z0-9_]+)[^{]*\{[^{}]*public\s+static\s+void\s+main', clean_code, re.DOTALL)
-            if main_match:
-                class_name = main_match.group(1)
+            has_main = bool(re.search(r'public\s+static\s+void\s+main', clean_code))
+            has_solution = bool(re.search(r'class\s+Solution\b', clean_code))
+
+            if not has_main and has_solution:
+                adapted_code = re.sub(r'public\s+class\s+Solution\b', 'class Solution', clean_code)
+                full_code = (
+                    "import java.io.*;\n"
+                    "import java.util.*;\n"
+                    "import java.util.regex.*;\n"
+                    "import java.lang.reflect.*;\n\n"
+                    + adapted_code
+                    + "\n\n"
+                    + JAVA_LEETCODE_RUNNER
+                )
+                class_name = "Main"
             else:
-                pub_match = re.search(r'public\s+class\s+([A-Za-z0-9_]+)', clean_code)
-                if pub_match:
-                    class_name = pub_match.group(1)
+                main_match = re.search(r'class\s+([A-Za-z0-9_]+)[^{]*\{[^{}]*public\s+static\s+void\s+main', clean_code, re.DOTALL)
+                if main_match:
+                    class_name = main_match.group(1)
                 else:
-                    cls_match = re.search(r'class\s+([A-Za-z0-9_]+)', clean_code)
-                    class_name = cls_match.group(1) if cls_match else "Main"
+                    pub_match = re.search(r'public\s+class\s+([A-Za-z0-9_]+)', clean_code)
+                    if pub_match:
+                        class_name = pub_match.group(1)
+                    else:
+                        cls_match = re.search(r'class\s+([A-Za-z0-9_]+)', clean_code)
+                        class_name = cls_match.group(1) if cls_match else "Main"
+                full_code = clean_code
 
             src_path = os.path.join(work_dir, f"{class_name}.java")
             with open(src_path, "w", encoding="utf-8") as f:
-                f.write(clean_code)
+                f.write(full_code)
 
             with open(os.path.join(work_dir, ".main_class"), "w", encoding="utf-8") as f:
                 f.write(class_name)
@@ -498,7 +1026,10 @@ class LocalCodeRunner:
         If stdin is empty, it verifies syntax / compilation, and if executed,
         gracefully treats input-exhaustion / missing-input exceptions as passing pre-flight.
         """
-        from pipeline.error_parser import parse_error_line
+        try:
+            from pipeline.error_parser import parse_error_line
+        except ImportError:
+            from backend.pipeline.error_parser import parse_error_line
 
         with tempfile.TemporaryDirectory() as tmpdir:
             # 1. Compile stage (C++, Java, Python syntax, JS syntax)
