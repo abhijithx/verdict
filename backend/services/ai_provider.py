@@ -48,7 +48,10 @@ async def _call_gemini(
         )
         return response.text.strip()
 
-    return await asyncio.to_thread(_sync_call)
+    try:
+        return await asyncio.wait_for(asyncio.to_thread(_sync_call), timeout=45)
+    except asyncio.TimeoutError:
+        raise AIProviderError(f"Gemini API call timed out after 45 seconds (model: {settings.GEMINI_MODEL})")
 
 
 async def _call_groq(

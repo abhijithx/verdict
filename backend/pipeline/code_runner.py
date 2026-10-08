@@ -23,7 +23,10 @@ import time
 import shutil
 import subprocess
 import re
-from typing import Optional, List
+import json
+import ast
+import inspect
+from typing import Optional, List, Any
 from dataclasses import dataclass
 
 DEFAULT_TIMEOUT_MS = 5000
@@ -45,6 +48,102 @@ class TestExecutionResult:
     expected_stdout: str = ""
     stderr: str = ""
     time_ms: float = 0.0
+
+
+PYTHON_LEETCODE_HARNESS = r'''
+# --- Automatic Verdict AI LeetCode Runner Harness ---
+if __name__ == "__main__":
+    import sys, json, ast, inspect
+
+    def _verdict_run():
+        raw_input = sys.stdin.read()
+        if "Solution" not in globals():
+            return
+        sol_cls = globals()["Solution"]
+        sol = sol_cls()
+        methods = [m for m in dir(sol) if not m.startswith("_") and callable(getattr(sol, m))]
+        if not methods:
+            return
+        func = getattr(sol, methods[0])
+        sig = inspect.signature(func)
+        params = list(sig.parameters.values())
+
+        def _parse_val(val_str, expected_type=None, param_name=""):
+            val_str = (val_str or "").strip()
+            is_list = False
+            if expected_type and any(t in str(expected_type).lower() for t in ("list", "sequence", "iterable")):
+                is_list = True
+            elif param_name.lower() in ("nums", "candidates", "arr", "array", "nodes", "points", "matrix", "grid", "vals", "digits"):
+                is_list = True
+
+            if not val_str:
+                return [] if is_list else None
+
+            # Handle param = value
+            if "=" in val_str and not val_str.startswith("{"):
+                parts = val_str.split("=", 1)
+                val_str = parts[1].strip()
+
+            parsed = None
+            try:
+                parsed = ast.literal_eval(val_str)
+            except Exception:
+                pass
+
+            if parsed is None:
+                # Try splitting by space
+                tokens = val_str.split()
+                if len(tokens) > 1:
+                    try:
+                        parsed = [int(t) for t in tokens]
+                    except ValueError:
+                        try:
+                            parsed = [float(t) for t in tokens]
+                        except ValueError:
+                            parsed = tokens
+                elif len(tokens) == 1:
+                    try:
+                        parsed = int(tokens[0])
+                    except ValueError:
+                        try:
+                            parsed = float(tokens[0])
+                        except ValueError:
+                            parsed = tokens[0]
+                else:
+                    parsed = val_str
+
+            if is_list and not isinstance(parsed, list):
+                parsed = [parsed] if parsed is not None else []
+            return parsed
+
+        raw_lines = [l.strip() for l in raw_input.splitlines()]
+        non_empty = [l for l in raw_lines if l]
+
+        args = []
+        if len(non_empty) == len(params):
+            for line, param in zip(non_empty, params):
+                args.append(_parse_val(line, param.annotation, param.name))
+        elif len(raw_lines) == len(params):
+            for line, param in zip(raw_lines, params):
+                args.append(_parse_val(line, param.annotation, param.name))
+        else:
+            for i, param in enumerate(params):
+                if i < len(non_empty):
+                    args.append(_parse_val(non_empty[i], param.annotation, param.name))
+                else:
+                    args.append(_parse_val("", param.annotation, param.name))
+
+        try:
+            res = func(*args)
+            if isinstance(res, (list, dict, bool, int, float, str)) or res is None:
+                print(json.dumps(res))
+            else:
+                print(res)
+        except Exception as e:
+            print(f"Runtime error in {methods[0]}: {e}", file=sys.stderr)
+
+    _verdict_run()
+'''
 
 
 def _clean_output(text: Optional[str]) -> str:
@@ -69,12 +168,60 @@ def _clean_output(text: Optional[str]) -> str:
     return "\n".join(lines)
 
 
+def _try_parse_val(text: str) -> Any:
+    """Attempt to parse text as JSON or Python literal structure."""
+    if not text:
+        return None
+    try:
+        return json.loads(text)
+    except Exception:
+        pass
+    try:
+        return ast.literal_eval(text)
+    except Exception:
+        pass
+    return None
+
+
+def _structures_equal(a: Any, b: Any) -> bool:
+    """Deep structural comparison with unordered list/subset tolerance."""
+    if a == b:
+        return True
+    if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+        return abs(a - b) < 1e-6
+    if isinstance(a, str) and isinstance(b, str):
+        return a.strip().lower() == b.strip().lower()
+    if isinstance(a, list) and isinstance(b, list):
+        if len(a) != len(b):
+            return False
+        # Direct element-wise match
+        if all(_structures_equal(x, y) for x, y in zip(a, b)):
+            return True
+        # Try sorted comparison (if inner elements are lists or primitives)
+        try:
+            def sort_key(item):
+                if isinstance(item, list):
+                    return (0, tuple(sort_key(sub) for sub in sorted(item, key=sort_key)))
+                return (1, str(item))
+            sorted_a = sorted(a, key=sort_key)
+            sorted_b = sorted(b, key=sort_key)
+            return all(_structures_equal(x, y) for x, y in zip(sorted_a, sorted_b))
+        except Exception:
+            pass
+    if isinstance(a, dict) and isinstance(b, dict):
+        if set(a.keys()) != set(b.keys()):
+            return False
+        return all(_structures_equal(a[k], b[k]) for k in a)
+    return False
+
+
 def outputs_match(actual: Optional[str], expected: Optional[str]) -> bool:
     """
     Fair and robust comparison between actual execution output and expected test output.
     Supports:
     - If expected is empty or not provided, returns True (user inspecting custom input)
     - Exact match after line trimming
+    - Deep structural match for JSON / lists (including unordered combinations)
     - Tokenized line-by-line whitespace and delimiter normalization ([0, 1] vs 0 1)
     - Boolean case normalization (True vs true)
     - Numeric equivalence (3.0 == 3)
@@ -88,6 +235,13 @@ def outputs_match(actual: Optional[str], expected: Optional[str]) -> bool:
     act_clean = _clean_output(actual)
     if act_clean == exp_clean:
         return True
+
+    # 0. Deep structural comparison (handles [[2,2,3],[7]] vs [[7],[2,2,3]])
+    val_act = _try_parse_val(act_clean)
+    val_exp = _try_parse_val(exp_clean)
+    if val_act is not None and val_exp is not None:
+        if _structures_equal(val_act, val_exp):
+            return True
 
     def tokenize_line(line: str) -> list[str]:
         # Normalize delimiters (brackets, parens, commas) to spaces
@@ -199,15 +353,26 @@ class LocalRunner:
         if lang in ("python", "py"):
             filename = "main.py"
             filepath = os.path.join(work_dir, filename)
-            with open(filepath, "w", encoding="utf-8") as f:
-                f.write(code)
-            # Pre-flight syntax compilation check (fast, in-process)
+
+            # Check for user-written syntax errors in pure user code
             try:
-                compile(code, filepath, "exec")
-                return True, "", "", None
+                compile(code, "<submitted_code>", "exec")
             except SyntaxError as se:
                 err_msg = f"SyntaxError: {se.msg} (line {se.lineno})"
                 return False, "", err_msg, se.lineno
+
+            # Check if user provided LeetCode-style `class Solution` without a driver
+            has_solution_class = bool(re.search(r'^\s*class\s+Solution\b', code, re.MULTILINE))
+            has_main_driver = ("__main__" in code) or ("sys.stdin" in code) or ("input(" in code)
+
+            full_code = code
+            if has_solution_class and not has_main_driver:
+                full_code = code + "\n\n" + PYTHON_LEETCODE_HARNESS
+
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(full_code)
+
+            return True, "", "", None
 
         elif lang in ("javascript", "js", "node"):
             filename = "main.js"
