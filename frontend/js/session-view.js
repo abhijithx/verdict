@@ -61,17 +61,26 @@ const SessionView = {
             }
 
             // Sync Language with Monaco and Dropdown
-            MonacoSetup.switchLanguage(this._language);
+            this._codeByLang = {};
+            MonacoSetup.switchLanguage(this._language, false);
             MonacoSetup.showOnlyTab(this._language);
             const langSelect = document.getElementById('lang-select');
             if (langSelect) langSelect.value = this._language;
 
-            // Set Editor Code - ensure working starter code if empty or comment-only
+            // Set Editor Code - check local cache, session code, or initial starter template
             const editor = MonacoSetup.getEditor();
             let initialCode = session.code || '';
+            try {
+                const savedCode = localStorage.getItem(`verdict_code_${sessionId}_${this._language}`);
+                if (savedCode && !this._isCodeEmpty(savedCode, this._language)) {
+                    initialCode = savedCode;
+                }
+            } catch (e) {}
+
             if (this._isCodeEmpty(initialCode, this._language)) {
                 initialCode = this._getStarterCode(this._language, session.problem);
             }
+            this._codeByLang[this._language] = initialCode;
             if (editor) {
                 editor.setValue(initialCode);
             }
@@ -352,7 +361,17 @@ const SessionView = {
                 stderr: tc.stderr || ''
             }));
         } else {
-            this._testCases = this._extractProblemSampleCases(session.problem);
+            let cached = null;
+            try {
+                const raw = localStorage.getItem(`verdict_testcases_${session.session_id}`);
+                if (raw) cached = JSON.parse(raw);
+            } catch (e) {}
+
+            if (cached && cached.length > 0) {
+                this._testCases = cached;
+            } else {
+                this._testCases = this._extractProblemSampleCases(session.problem);
+            }
         }
         this._selectedTestCaseIndex = 0;
         this._renderTestCaseTabs();
@@ -483,6 +502,83 @@ const SessionView = {
         this._lastRunPassed = false;
     },
 
+    onLanguageSelect(newLang) {
+        newLang = (newLang || 'python').toLowerCase();
+        const prevLang = (this._language || 'python').toLowerCase();
+        if (newLang === prevLang) return;
+
+        // 1. Save current editor code for the previous language so work is not lost
+        const currentCode = this.getEditorCode();
+        if (!this._codeByLang) this._codeByLang = {};
+        if (currentCode && !this._isCodeEmpty(currentCode, prevLang)) {
+            this._codeByLang[prevLang] = currentCode;
+            try {
+                localStorage.setItem(`verdict_code_${this._sessionId}_${prevLang}`, currentCode);
+            } catch (e) {}
+        }
+
+        // 2. Fetch code for the new language (from session cache, localStorage, or problem starter code)
+        let codeForNewLang = this._codeByLang[newLang];
+        if (!codeForNewLang) {
+            try {
+                codeForNewLang = localStorage.getItem(`verdict_code_${this._sessionId}_${newLang}`);
+            } catch (e) {}
+        }
+        if (!codeForNewLang || this._isCodeEmpty(codeForNewLang, newLang)) {
+            codeForNewLang = this._getStarterCode(newLang, this._session ? this._session.problem : null);
+        }
+        this._codeByLang[newLang] = codeForNewLang;
+
+        // 3. Switch language in Monaco and set the code
+        this._language = newLang;
+        MonacoSetup.switchLanguage(newLang, false);
+        MonacoSetup.showOnlyTab(newLang);
+        const editor = MonacoSetup.getEditor();
+        if (editor) {
+            editor.setValue(codeForNewLang);
+        }
+
+        // 4. Update dropdown UI
+        const langSelect = document.getElementById('lang-select');
+        if (langSelect && langSelect.value !== newLang) {
+            langSelect.value = newLang;
+        }
+
+        // 5. User feedback
+        const langNames = { python: 'Python 3', cpp: 'C++ (17)', java: 'Java (17)', javascript: 'JavaScript' };
+        if (typeof Toast !== 'undefined') {
+            Toast.info(`Switched to ${langNames[newLang] || newLang.toUpperCase()} starter code`);
+        }
+        this._lastRunPassed = false;
+    },
+
+    resetCodeToInitial() {
+        const lang = (this._language || 'python').toLowerCase();
+        const starter = this._getStarterCode(lang, this._session ? this._session.problem : null);
+        const editor = MonacoSetup.getEditor();
+        if (editor) {
+            editor.setValue(starter);
+            editor.focus();
+        }
+        if (!this._codeByLang) this._codeByLang = {};
+        this._codeByLang[lang] = starter;
+        try {
+            localStorage.removeItem(`verdict_code_${this._sessionId}_${lang}`);
+        } catch (e) {}
+        this._lastRunPassed = false;
+        const langNames = { python: 'Python 3', cpp: 'C++ (17)', java: 'Java (17)', javascript: 'JavaScript' };
+        if (typeof Toast !== 'undefined') {
+            Toast.info(`Reset code to ${langNames[lang] || lang.toUpperCase()} initial starter state.`);
+        }
+    },
+
+    _persistTestCasesLocally() {
+        if (!this._sessionId || !this._testCases) return;
+        try {
+            localStorage.setItem(`verdict_testcases_${this._sessionId}`, JSON.stringify(this._testCases));
+        } catch (e) {}
+    },
+
     _renderTestCaseTabs() {
         const container = document.getElementById('lc-case-tabs-container');
         const inputArea = document.getElementById('lc-case-stdin');
@@ -538,6 +634,7 @@ const SessionView = {
                 if (this._testCases[this._selectedTestCaseIndex]) {
                     this._testCases[this._selectedTestCaseIndex].stdin = e.target.value;
                     this._lastRunPassed = false;
+                    this._persistTestCasesLocally();
                 }
             };
         }
@@ -548,6 +645,7 @@ const SessionView = {
                 if (this._testCases[this._selectedTestCaseIndex]) {
                     this._testCases[this._selectedTestCaseIndex].expected_stdout = e.target.value;
                     this._lastRunPassed = false;
+                    this._persistTestCasesLocally();
                 }
             };
         }
@@ -564,6 +662,7 @@ const SessionView = {
             if (outputArea && outputArea.value !== undefined) {
                 this._testCases[this._selectedTestCaseIndex].expected_stdout = outputArea.value;
             }
+            this._persistTestCasesLocally();
         }
         this._selectedTestCaseIndex = idx;
         this._renderTestCaseTabs();
@@ -579,6 +678,7 @@ const SessionView = {
             this._selectedTestCaseIndex = this._testCases.length - 1;
         }
         this._lastRunPassed = false;
+        this._persistTestCasesLocally();
         this._renderTestCaseTabs();
         if (typeof Toast !== 'undefined') Toast.info('Testcase removed.');
     },
@@ -591,16 +691,20 @@ const SessionView = {
             if (inputArea) this._testCases[this._selectedTestCaseIndex].stdin = inputArea.value;
             if (outputArea) this._testCases[this._selectedTestCaseIndex].expected_stdout = outputArea.value;
         }
-        const newId = this._testCases.length + 1;
+        const newId = (this._testCases ? this._testCases.length : 0) + 1;
+        if (!this._testCases) this._testCases = [];
+
         this._testCases.push({
             test_id: newId,
             test_case_id: `Case ${newId}`,
             description: `Custom Case ${newId}`,
             stdin: '',
-            expected_stdout: ''
+            expected_stdout: '',
+            is_edge_case: false
         });
         this._selectedTestCaseIndex = this._testCases.length - 1;
         this._lastRunPassed = false;
+        this._persistTestCasesLocally();
         this._renderTestCaseTabs();
         if (typeof Toast !== 'undefined') Toast.info(`Added Case ${newId}. You can enter stdin input and expected output.`);
         const inputArea = document.getElementById('lc-case-stdin');
@@ -1097,111 +1201,125 @@ const SessionView = {
 
     _getStarterCode(language = 'python', problem = null) {
         const lang = (language || 'python').toLowerCase();
-        const pTitle = (problem && problem.title ? problem.title : '').toLowerCase();
+        const pTitle = (problem && problem.title ? problem.title : '').trim();
+
+        // 1. Check if problem already has code snippets stored in DB or local storage
+        let snippets = (problem && problem.code_snippets) ? problem.code_snippets : null;
+        if (!snippets && problem && problem.problem_id) {
+            try {
+                const raw = localStorage.getItem(`verdict_snippets_${problem.problem_id}`);
+                if (raw) snippets = JSON.parse(raw);
+            } catch (e) {}
+        }
+        if (snippets) {
+            if (lang === 'python') {
+                const s = snippets.python || snippets.python3;
+                if (s && s.trim()) return s;
+            } else if (lang === 'cpp' || lang === 'c++') {
+                const s = snippets.cpp || snippets['c++'];
+                if (s && s.trim()) return s;
+            } else if (lang === 'java') {
+                const s = snippets.java;
+                if (s && s.trim()) return s;
+            } else if (lang === 'javascript' || lang === 'js') {
+                const s = snippets.javascript || snippets.js;
+                if (s && s.trim()) return s;
+            }
+        }
+
+        // 2. Specialized signatures for classic LeetCode problems
+        const lowerTitle = pTitle.toLowerCase();
+        if (lowerTitle.includes('two sum')) {
+            if (lang === 'python') {
+                return `class Solution:\n    def twoSum(self, nums: list[int], target: int) -> list[int]:\n        pass\n`;
+            } else if (lang === 'cpp' || lang === 'c++') {
+                return `#include <vector>\nusing namespace std;\n\nclass Solution {\npublic:\n    vector<int> twoSum(vector<int>& nums, int target) {\n        \n    }\n};\n`;
+            } else if (lang === 'java') {
+                return `class Solution {\n    public int[] twoSum(int[] nums, int target) {\n        return new int[]{};\n    }\n}\n`;
+            } else {
+                return `/**\n * @param {number[]} nums\n * @param {number} target\n * @return {number[]}\n */\nvar twoSum = function(nums, target) {\n    \n};\n`;
+            }
+        }
+
+        if (lowerTitle.includes('reverse') && (lowerTitle.includes('linked list') || lowerTitle.includes('list'))) {
+            if (lang === 'python') {
+                return `# Definition for singly-linked list.\n# class ListNode:\n#     def __init__(self, val=0, next=None):\n#         self.val = val\n#         self.next = next\n\nclass Solution:\n    def reverseList(self, head: Optional[ListNode]) -> Optional[ListNode]:\n        pass\n`;
+            } else if (lang === 'cpp' || lang === 'c++') {
+                return `class Solution {\npublic:\n    ListNode* reverseList(ListNode* head) {\n        \n    }\n};\n`;
+            } else if (lang === 'java') {
+                return `class Solution {\n    public ListNode reverseList(ListNode head) {\n        return null;\n    }\n}\n`;
+            } else {
+                return `var reverseList = function(head) {\n    \n};\n`;
+            }
+        }
+
+        if (lowerTitle.includes('valid parentheses')) {
+            if (lang === 'python') {
+                return `class Solution:\n    def isValid(self, s: str) -> bool:\n        pass\n`;
+            } else if (lang === 'cpp' || lang === 'c++') {
+                return `#include <string>\nusing namespace std;\n\nclass Solution {\npublic:\n    bool isValid(string s) {\n        \n    }\n};\n`;
+            } else if (lang === 'java') {
+                return `class Solution {\n    public boolean isValid(String s) {\n        return false;\n    }\n}\n`;
+            } else {
+                return `var isValid = function(s) {\n    \n};\n`;
+            }
+        }
+
+        if (lowerTitle.includes('palindrome') && !lowerTitle.includes('partition')) {
+            if (lang === 'python') {
+                return `class Solution:\n    def isPalindrome(self, x: int) -> bool:\n        pass\n`;
+            } else if (lang === 'cpp' || lang === 'c++') {
+                return `class Solution {\npublic:\n    bool isPalindrome(int x) {\n        \n    }\n};\n`;
+            } else if (lang === 'java') {
+                return `class Solution {\n    public boolean isPalindrome(int x) {\n        return false;\n    }\n}\n`;
+            } else {
+                return `var isPalindrome = function(x) {\n    \n};\n`;
+            }
+        }
+
+        if (lowerTitle.includes('3sum') || lowerTitle.includes('three sum')) {
+            if (lang === 'python') {
+                return `class Solution:\n    def threeSum(self, nums: list[int]) -> list[list[int]]:\n        pass\n`;
+            } else if (lang === 'cpp' || lang === 'c++') {
+                return `#include <vector>\nusing namespace std;\n\nclass Solution {\npublic:\n    vector<vector<int>> threeSum(vector<int>& nums) {\n        \n    }\n};\n`;
+            } else if (lang === 'java') {
+                return `import java.util.*;\n\nclass Solution {\n    public List<List<Integer>> threeSum(int[] nums) {\n        return new ArrayList<>();\n    }\n}\n`;
+            } else {
+                return `var threeSum = function(nums) {\n    \n};\n`;
+            }
+        }
+
+        if (lowerTitle.includes('climbing stairs')) {
+            if (lang === 'python') {
+                return `class Solution:\n    def climbStairs(self, n: int) -> int:\n        pass\n`;
+            } else if (lang === 'cpp' || lang === 'c++') {
+                return `class Solution {\npublic:\n    int climbStairs(int n) {\n        \n    }\n};\n`;
+            } else if (lang === 'java') {
+                return `class Solution {\n    public int climbStairs(int n) {\n        return 0;\n    }\n}\n`;
+            } else {
+                return `var climbStairs = function(n) {\n    \n};\n`;
+            }
+        }
+
+        // 3. Clean LeetCode-style algorithmic method generator for any manual / custom problem
+        const cleanTitle = pTitle.replace(/^\d+[\.\s]*/, '').replace(/[^a-zA-Z0-9\s]/g, '').trim();
+        const words = cleanTitle.split(/\s+/).filter(Boolean);
+        let methodName = 'solve';
+        if (words.length > 0) {
+            methodName = words[0].toLowerCase() + words.slice(1).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join('');
+        }
+        if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(methodName)) {
+            methodName = 'solve';
+        }
 
         if (lang === 'python') {
-            if (pTitle.includes('two sum')) {
-                return `import sys
-
-def two_sum():
-    tokens = sys.stdin.read().split()
-    if len(tokens) < 2:
-        return
-    n = int(tokens[0])
-    target = int(tokens[1])
-    nums = [int(x) for x in tokens[2:2 + n]]
-
-    lookup = {}
-    for i, num in enumerate(nums):
-        diff = target - num
-        if diff in lookup:
-            print(f"{lookup[diff]} {i}")
-            return
-        lookup[num] = i
-
-if __name__ == '__main__':
-    two_sum()
-`;
-            } else if (pTitle.includes('fizz')) {
-                return `import sys
-
-def fizz_buzz():
-    tokens = sys.stdin.read().split()
-    if not tokens:
-        return
-    n = int(tokens[0])
-    for i in range(1, n + 1):
-        if i % 15 == 0:
-            print("FizzBuzz")
-        elif i % 3 == 0:
-            print("Fizz")
-        elif i % 5 == 0:
-            print("Buzz")
-        else:
-            print(i)
-
-if __name__ == '__main__':
-    fizz_buzz()
-`;
-            }
-            return `import sys
-
-def solve():
-    # Read inputs from standard input
-    input_data = sys.stdin.read().split()
-    if not input_data:
-        return
-
-    # Write your solution logic here
-    print(" ".join(input_data))
-
-if __name__ == '__main__':
-    solve()
-`;
+            return `class Solution:\n    def ${methodName}(self, *args, **kwargs):\n        # Implement your solution\n        pass\n`;
         } else if (lang === 'cpp' || lang === 'c++') {
-            return `#include <iostream>
-#include <vector>
-#include <string>
-
-using namespace std;
-
-int main() {
-    ios_base::sync_with_stdio(false);
-    cin.tie(NULL);
-
-    string token;
-    while (cin >> token) {
-        cout << token << " ";
-    }
-    cout << "\\n";
-
-    return 0;
-}
-`;
+            return `#include <iostream>\n#include <vector>\n#include <string>\n\nusing namespace std;\n\nclass Solution {\npublic:\n    // Implement ${methodName}\n};\n`;
         } else if (lang === 'java') {
-            return `import java.util.Scanner;
-
-public class Main {
-    public static void main(String[] args) {
-        Scanner sc = new Scanner(System.in);
-        while (sc.hasNext()) {
-            System.out.print(sc.next() + " ");
-        }
-        System.out.println();
-    }
-}
-`;
+            return `import java.util.*;\n\nclass Solution {\n    // Implement ${methodName}\n}\n`;
         } else {
-            return `const fs = require('fs');
-
-function solve() {
-    const input = fs.readFileSync(0, 'utf-8').trim();
-    if (!input) return;
-    console.log(input);
-}
-
-solve();
-`;
+            return `/**\n * Solution\n */\nvar ${methodName} = function() {\n    // Implement your solution\n};\n`;
         }
     },
 
@@ -1246,6 +1364,16 @@ solve();
 
             const result = await ApiClient.dryRunSession(this._sessionId, code, currentStdin, userCases, this._language);
             if (result.test_results && result.test_results.length > 0) {
+                result.test_results.forEach((tr, idx) => {
+                    if (this._testCases && this._testCases[idx]) {
+                        this._testCases[idx].passed = tr.passed;
+                        this._testCases[idx].actual_stdout = tr.actual_stdout;
+                        this._testCases[idx].time_ms = tr.time_ms;
+                        this._testCases[idx].stderr = tr.stderr;
+                    }
+                });
+                this._persistTestCasesLocally();
+                this._renderTestCaseTabs();
                 this._renderTestResults(result.test_results, this._selectedTestCaseIndex);
             } else {
                 this._renderDryRun(result, currentStdin);

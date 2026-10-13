@@ -245,6 +245,10 @@ const MonacoSetup = {
     },
 
     resetCode() {
+        if (typeof SessionView !== 'undefined' && SessionView.resetCodeToInitial) {
+            SessionView.resetCodeToInitial();
+            return;
+        }
         const activeLang = this._currentLanguage || 'python';
         this.setCode(BOILERPLATES[activeLang] || '');
         if (typeof Toast !== 'undefined') {

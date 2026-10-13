@@ -95,6 +95,10 @@ async def init_db():
                 cols = [c["name"] for c in inspector.get_columns("recommendation_history")]
                 if "problem" not in cols:
                     db_conn.execute(text("DROP TABLE recommendation_history"))
+            if "problems" in tables:
+                cols = [c["name"] for c in inspector.get_columns("problems")]
+                if "code_snippets" not in cols:
+                    db_conn.execute(text("ALTER TABLE problems ADD COLUMN code_snippets JSON"))
             Base.metadata.create_all(db_conn)
 
         await conn.run_sync(_check_and_fix_tables)

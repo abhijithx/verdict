@@ -335,3 +335,59 @@ async def test_recommendation_to_evaluation_session_transfer():
         assert detail["test_cases"][0]["stdin"] == test_cases_payload[0]["input"]
 
 
+@pytest.mark.asyncio
+async def test_problem_ai_generation():
+    """Verify POST /api/problems/generate creates LeetCode-style structure, templates & test cases."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        res = await ac.post("/api/problems/generate", json={
+            "prompt": "Find the maximum subarray sum (Kadane algorithm)",
+            "difficulty": "medium"
+        })
+        assert res.status_code == 200
+        data = res.json()
+        assert "title" in data and len(data["title"]) > 0
+        assert "description" in data and len(data["description"]) > 0
+        assert data["difficulty"] == "medium"
+        assert "code_snippets" in data
+        snippets = data["code_snippets"]
+        assert "python" in snippets
+        assert "cpp" in snippets
+        assert "java" in snippets
+        assert "javascript" in snippets
+        assert "class Solution" in snippets["python"]
+        assert "sample_test_cases" in data and len(data["sample_test_cases"]) > 0
+
+        # Now create problem using this generated data
+        prob_res = await ac.post("/api/problems", json={
+            "title": data["title"],
+            "description": data["description"],
+            "difficulty": data["difficulty"],
+            "starter_code": snippets.get("python")
+        })
+        assert prob_res.status_code == 200
+        prob_id = prob_res.json()["problem_id"]
+
+        # And verify session can be created with generated snippets & test cases
+        tc_payload = [
+            {
+                "input": tc["stdin"],
+                "expected_output": tc["expected_stdout"],
+                "description": tc.get("description", "Sample case")
+            }
+            for tc in data["sample_test_cases"]
+        ]
+        sess_res = await ac.post(f"/api/sessions?problem_id={prob_id}", json={
+            "language": "python",
+            "submission_label": "Kadane Test Run",
+            "code": snippets["python"],
+            "test_cases": tc_payload
+        })
+        assert sess_res.status_code == 200
+        sess_id = sess_res.json()["session_id"]
+
+        detail = (await ac.get(f"/api/sessions/{sess_id}")).json()
+        assert len(detail.get("test_cases", [])) == len(tc_payload)
+
+
+

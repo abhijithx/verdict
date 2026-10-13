@@ -78,9 +78,23 @@ if __name__ == "__main__":
         if "Solution" in globals():
             try:
                 target_obj = globals()["Solution"]()
-                methods = [m for m in dir(target_obj) if not m.startswith("_") and callable(getattr(target_obj, m))]
-                if methods:
-                    func = getattr(target_obj, methods[0])
+                defined_names = [
+                    k for k, v in type(target_obj).__dict__.items()
+                    if not k.startswith("_") and callable(v)
+                ]
+                if not defined_names:
+                    defined_names = [m for m in dir(target_obj) if not m.startswith("_") and callable(getattr(target_obj, m))]
+
+                common_names = {'twosum', 'threesum', 'foursum', 'solve', 'solution', 'isvalid', 'mergetwolists', 'merge', 'maxsubarray', 'lengthoflongestsubstring', 'climbstairs', 'coinchange', 'search', 'reversestring', 'movezeroes', 'removeduplicates', 'removeelement'}
+                chosen_name = None
+                for name in defined_names:
+                    if name.lower() in common_names:
+                        chosen_name = name
+                        break
+                if not chosen_name and defined_names:
+                    chosen_name = defined_names[0]
+                if chosen_name:
+                    func = getattr(target_obj, chosen_name)
             except Exception:
                 pass
         if not func:
@@ -152,6 +166,50 @@ if __name__ == "__main__":
 
             return val
 
+        def _split_top_level(text):
+            parts = []
+            curr = []
+            depth_bracket = depth_brace = depth_paren = 0
+            in_quote = None
+            escaped = False
+            for ch in text:
+                if escaped:
+                    curr.append(ch)
+                    escaped = False
+                    continue
+                if ch == '\\':
+                    escaped = True
+                    curr.append(ch)
+                    continue
+                if in_quote:
+                    curr.append(ch)
+                    if ch == in_quote:
+                        in_quote = None
+                    continue
+                if ch in ('"', "'"):
+                    in_quote = ch
+                    curr.append(ch)
+                    continue
+                if ch == '[': depth_bracket += 1
+                elif ch == ']': depth_bracket = max(0, depth_bracket - 1)
+                elif ch == '{': depth_brace += 1
+                elif ch == '}': depth_brace = max(0, depth_brace - 1)
+                elif ch == '(': depth_paren += 1
+                elif ch == ')': depth_paren = max(0, depth_paren - 1)
+                
+                if (ch == ',' or ch == '\n' or ch == ';') and depth_bracket == 0 and depth_brace == 0 and depth_paren == 0:
+                    part = "".join(curr).strip()
+                    if part:
+                        parts.append(part)
+                    curr = []
+                else:
+                    curr.append(ch)
+            if curr:
+                part = "".join(curr).strip()
+                if part:
+                    parts.append(part)
+            return parts
+
         named = {}
         for p in params:
             pat = r'(?:^|[\n,;])\s*' + re.escape(p.name) + r'\s*=\s*(.*?)(?=(?:[\n,;]\s*[a-zA-Z_]\w*\s*=)|\Z)'
@@ -167,9 +225,13 @@ if __name__ == "__main__":
             if len(lines) == len(params):
                 args = [_parse_single(lines[i], p) for i, p in enumerate(params)]
             else:
-                for i, p in enumerate(params):
-                    val_str = lines[i] if i < len(lines) else ""
-                    args.append(_parse_single(val_str, p))
+                top_parts = _split_top_level(raw_input)
+                if len(top_parts) == len(params):
+                    args = [_parse_single(top_parts[i], p) for i, p in enumerate(params)]
+                else:
+                    for i, p in enumerate(params):
+                        val_str = top_parts[i] if i < len(top_parts) else (lines[i] if i < len(lines) else "")
+                        args.append(_parse_single(val_str, p))
 
         try:
             res = func(*args)
@@ -229,11 +291,17 @@ JS_LEETCODE_HARNESS = r'''
             targetObj = new Solution();
             const proto = Object.getPrototypeOf(targetObj);
             const methods = Object.getOwnPropertyNames(proto).filter(m => m !== 'constructor' && typeof targetObj[m] === 'function');
-            if (methods.length > 0) fn = targetObj[methods[0]].bind(targetObj);
+            if (methods.length > 0) {
+                const detected = typeof __DETECTED_NAMES__ !== 'undefined' ? __DETECTED_NAMES__ : [];
+                const candidates = [...detected, 'twoSum', 'solve', 'isValid', 'mergeTwoLists', 'maxSubArray', 'lengthOfLongestSubstring', 'solution', 'climbStairs', 'coinChange', 'search', 'reverseString', 'moveZeroes', 'removeDuplicates', 'removeElement', 'reverseList', 'invertTree'];
+                const chosen = methods.find(m => candidates.some(c => c.toLowerCase() === m.toLowerCase())) || methods[0];
+                fn = targetObj[chosen].bind(targetObj);
+            }
         } catch(e) {}
     }
     if (!fn) {
-        const candidates = ['twoSum', 'solve', 'isValid', 'mergeTwoLists', 'maxSubArray', 'lengthOfLongestSubstring', 'solution', 'climbStairs', 'coinChange', 'search', 'reverseString', 'moveZeroes'];
+        const detected = typeof __DETECTED_NAMES__ !== 'undefined' ? __DETECTED_NAMES__ : [];
+        const candidates = [...detected, 'twoSum', 'solve', 'isValid', 'mergeTwoLists', 'maxSubArray', 'lengthOfLongestSubstring', 'solution', 'climbStairs', 'coinChange', 'search', 'reverseString', 'moveZeroes', 'removeDuplicates', 'removeElement', 'reverseList', 'invertTree'];
         for (const name of candidates) {
             try {
                 if (eval('typeof ' + name) === 'function') {
@@ -262,6 +330,40 @@ JS_LEETCODE_HARNESS = r'''
         return s;
     }
 
+    function splitTopLevel(text) {
+        const parts = [];
+        let curr = '';
+        let bBracket = 0, bBrace = 0, bParen = 0;
+        let inQuote = null, escaped = false;
+        for (let i = 0; i < text.length; i++) {
+            const ch = text[i];
+            if (escaped) { curr += ch; escaped = false; continue; }
+            if (ch === '\\') { escaped = true; curr += ch; continue; }
+            if (inQuote) {
+                curr += ch;
+                if (ch === inQuote) inQuote = null;
+                continue;
+            }
+            if (ch === '"' || ch === "'") { inQuote = ch; curr += ch; continue; }
+            if (ch === '[') bBracket++;
+            else if (ch === ']') bBracket = Math.max(0, bBracket - 1);
+            else if (ch === '{') bBrace++;
+            else if (ch === '}') bBrace = Math.max(0, bBrace - 1);
+            else if (ch === '(') bParen++;
+            else if (ch === ')') bParen = Math.max(0, bParen - 1);
+
+            if ((ch === ',' || ch === '\n' || ch === ';') && bBracket === 0 && bBrace === 0 && bParen === 0) {
+                const p = curr.trim();
+                if (p) parts.push(p);
+                curr = '';
+            } else {
+                curr += ch;
+            }
+        }
+        if (curr.trim()) parts.push(curr.trim());
+        return parts;
+    }
+
     let args = [];
     const assignmentRegex = /(?:^|[\n,;])\s*([a-zA-Z_]\w*)\s*=\s*(.*?)(?=(?:[\n,;]\s*[a-zA-Z_]\w*\s*=)|$)/g;
     const matches = [...rawInput.matchAll(assignmentRegex)];
@@ -271,20 +373,105 @@ JS_LEETCODE_HARNESS = r'''
         const lines = rawInput.split('\n').map(l => l.trim()).filter(l => l);
         if (lines.length === fn.length) {
             args = lines.map(parseVal);
-        } else if (matches.length > 0) {
-            args = matches.map(m => parseVal(m[2]));
         } else {
-            args = lines.map(parseVal);
+            const topParts = splitTopLevel(rawInput);
+            if (topParts.length === fn.length) {
+                args = topParts.map(parseVal);
+            } else if (matches.length > 0) {
+                args = matches.map(m => parseVal(m[2]));
+            } else {
+                args = topParts.map(parseVal);
+            }
         }
     }
 
+    function arrayToListNode(arr) {
+        if (!Array.isArray(arr) || arr.length === 0) return null;
+        if (typeof ListNode === 'undefined') return arr;
+        const dummy = new ListNode(0);
+        let curr = dummy;
+        for (const x of arr) {
+            curr.next = new ListNode(x);
+            curr = curr.next;
+        }
+        return dummy.next;
+    }
+
+    function arrayToTreeNode(arr) {
+        if (!Array.isArray(arr) || arr.length === 0 || arr[0] === null) return null;
+        if (typeof TreeNode === 'undefined') return arr;
+        const root = new TreeNode(arr[0]);
+        const queue = [root];
+        let i = 1;
+        while (queue.length > 0 && i < arr.length) {
+            const node = queue.shift();
+            if (i < arr.length && arr[i] !== null && arr[i] !== undefined) {
+                node.left = new TreeNode(arr[i]);
+                queue.push(node.left);
+            }
+            i++;
+            if (i < arr.length && arr[i] !== null && arr[i] !== undefined) {
+                node.right = new TreeNode(arr[i]);
+                queue.push(node.right);
+            }
+            i++;
+        }
+        return root;
+    }
+
+    function serializeResult(v) {
+        if (v === null || v === undefined) return JSON.stringify(v);
+        if (typeof ListNode !== 'undefined' && (v instanceof ListNode || (v && typeof v.val !== 'undefined' && 'next' in v))) {
+            const arr = [];
+            let curr = v;
+            while (curr) {
+                arr.push(curr.val);
+                curr = curr.next;
+            }
+            return JSON.stringify(arr);
+        }
+        if (typeof TreeNode !== 'undefined' && (v instanceof TreeNode || (v && typeof v.val !== 'undefined' && 'left' in v && 'right' in v))) {
+            const arr = [];
+            const queue = [v];
+            while (queue.length > 0) {
+                const curr = queue.shift();
+                if (curr) {
+                    arr.push(curr.val);
+                    queue.push(curr.left);
+                    queue.push(curr.right);
+                } else {
+                    arr.push(null);
+                }
+            }
+            while (arr.length > 0 && arr[arr.length - 1] === null) {
+                arr.pop();
+            }
+            return JSON.stringify(arr);
+        }
+        return JSON.stringify(v);
+    }
+
     try {
+        const fnStr = fn.toString();
+        const pMatch = fnStr.match(/(?:function\s*\w*\s*\(|^\s*\()?([^)]*)\)?/);
+        const paramNames = pMatch && pMatch[1] ? pMatch[1].split(',').map(s => s.trim().split('=')[0].trim().toLowerCase()).filter(Boolean) : [];
+        for (let i = 0; i < args.length; i++) {
+            const pName = i < paramNames.length ? paramNames[i] : '';
+            if (Array.isArray(args[i])) {
+                if (pName.includes('head') || pName.includes('list')) {
+                    args[i] = arrayToListNode(args[i]);
+                } else if (pName.includes('root') || pName.includes('tree')) {
+                    args[i] = arrayToTreeNode(args[i]);
+                }
+            }
+        }
+
         let res = fn(...args);
         if (res === undefined && args.length > 0 && typeof args[0] === 'object') {
             res = args[0];
         }
         if (res !== undefined) {
-            console.log(JSON.stringify(res));
+            console.log(serializeResult(res));
         }
     } catch(err) {
         console.error('Runtime error in solution: ' + err.message);
@@ -308,10 +495,24 @@ class Main {
         Class<?> solClass = Class.forName("Solution");
         Object solInstance = solClass.getDeclaredConstructor().newInstance();
         Method target = null;
+        String[] commonNames = {"twosum", "threesum", "solve", "solution", "isvalid", "mergetwolists", "merge", "maxsubarray", "lengthoflongestsubstring", "climbstairs", "coinchange", "search", "reversestring", "movezeroes", "removeduplicates", "removeelement"};
         for (Method m : solClass.getDeclaredMethods()) {
             if (Modifier.isPublic(m.getModifiers()) && !m.getName().startsWith("_")) {
-                target = m;
-                break;
+                for (String cn : commonNames) {
+                    if (m.getName().equalsIgnoreCase(cn)) {
+                        target = m;
+                        break;
+                    }
+                }
+                if (target != null) break;
+            }
+        }
+        if (target == null) {
+            for (Method m : solClass.getDeclaredMethods()) {
+                if (Modifier.isPublic(m.getModifiers()) && !m.getName().startsWith("_")) {
+                    target = m;
+                    break;
+                }
             }
         }
         if (target == null) return;
@@ -330,6 +531,40 @@ class Main {
                 String trimmed = l.trim();
                 if (!trimmed.isEmpty()) rawParts.add(trimmed);
             }
+        }
+        if (rawParts.size() != pTypes.length) {
+            List<String> topParts = new ArrayList<>();
+            StringBuilder curr = new StringBuilder();
+            int bBracket = 0, bBrace = 0, bParen = 0;
+            char inQuote = 0;
+            boolean escaped = false;
+            for (int ci = 0; ci < raw.length(); ci++) {
+                char ch = raw.charAt(ci);
+                if (escaped) { curr.append(ch); escaped = false; continue; }
+                if (ch == '\\') { escaped = true; curr.append(ch); continue; }
+                if (inQuote != 0) {
+                    curr.append(ch);
+                    if (ch == inQuote) inQuote = 0;
+                    continue;
+                }
+                if (ch == '"' || ch == '\'') { inQuote = ch; curr.append(ch); continue; }
+                if (ch == '[') bBracket++;
+                else if (ch == ']') bBracket = Math.max(0, bBracket - 1);
+                else if (ch == '{') bBrace++;
+                else if (ch == '}') bBrace = Math.max(0, bBrace - 1);
+                else if (ch == '(') bParen++;
+                else if (ch == ')') bParen = Math.max(0, bParen - 1);
+
+                if ((ch == ',' || ch == '\n' || ch == ';') && bBracket == 0 && bBrace == 0 && bParen == 0) {
+                    String p = curr.toString().trim();
+                    if (!p.isEmpty()) topParts.add(p);
+                    curr = new StringBuilder();
+                } else {
+                    curr.append(ch);
+                }
+            }
+            if (!curr.toString().trim().isEmpty()) topParts.add(curr.toString().trim());
+            if (topParts.size() == pTypes.length) rawParts = topParts;
         }
 
         for (int i = 0; i < pTypes.length; i++) {
@@ -406,6 +641,44 @@ class Main {
                     while (nm.find()) iList.add(Integer.parseInt(nm.group()));
                     invokeArgs[i] = iList;
                 }
+            } else if (pt.getSimpleName().equals("ListNode")) {
+                Matcher nm = Pattern.compile("-?\\d+").matcher(part);
+                ListNode dummy = new ListNode(0);
+                ListNode curr = dummy;
+                while (nm.find()) {
+                    curr.next = new ListNode(Integer.parseInt(nm.group()));
+                    curr = curr.next;
+                }
+                invokeArgs[i] = dummy.next;
+            } else if (pt.getSimpleName().equals("TreeNode")) {
+                Matcher nm = Pattern.compile("-?\\d+|null").matcher(part);
+                List<Integer> vals = new ArrayList<>();
+                while (nm.find()) {
+                    String s = nm.group();
+                    vals.add(s.equals("null") ? null : Integer.parseInt(s));
+                }
+                if (vals.isEmpty() || vals.get(0) == null) {
+                    invokeArgs[i] = null;
+                } else {
+                    TreeNode root = new TreeNode(vals.get(0));
+                    List<TreeNode> queue = new ArrayList<>();
+                    queue.add(root);
+                    int vi = 1;
+                    while (!queue.isEmpty() && vi < vals.size()) {
+                        TreeNode parent = queue.remove(0);
+                        if (vi < vals.size() && vals.get(vi) != null) {
+                            parent.left = new TreeNode(vals.get(vi));
+                            queue.add(parent.left);
+                        }
+                        vi++;
+                        if (vi < vals.size() && vals.get(vi) != null) {
+                            parent.right = new TreeNode(vals.get(vi));
+                            queue.add(parent.right);
+                        }
+                        vi++;
+                    }
+                    invokeArgs[i] = root;
+                }
             } else {
                 invokeArgs[i] = null;
             }
@@ -419,6 +692,46 @@ class Main {
         }
         if (result == null) {
             System.out.println("null");
+        } else if (result.getClass().getSimpleName().equals("ListNode")) {
+            List<Integer> list = new ArrayList<>();
+            try {
+                Field vf = result.getClass().getDeclaredField("val");
+                Field nf = result.getClass().getDeclaredField("next");
+                vf.setAccessible(true);
+                nf.setAccessible(true);
+                Object c = result;
+                while (c != null) {
+                    list.add((Integer) vf.get(c));
+                    c = nf.get(c);
+                }
+            } catch (Exception e) {}
+            System.out.println(list.toString());
+        } else if (result.getClass().getSimpleName().equals("TreeNode")) {
+            List<String> list = new ArrayList<>();
+            try {
+                Field vf = result.getClass().getDeclaredField("val");
+                Field lf = result.getClass().getDeclaredField("left");
+                Field rf = result.getClass().getDeclaredField("right");
+                vf.setAccessible(true);
+                lf.setAccessible(true);
+                rf.setAccessible(true);
+                List<Object> q = new ArrayList<>();
+                q.add(result);
+                while (!q.isEmpty()) {
+                    Object curr = q.remove(0);
+                    if (curr != null) {
+                        list.add(String.valueOf(vf.get(curr)));
+                        q.add(lf.get(curr));
+                        q.add(rf.get(curr));
+                    } else {
+                        list.add("null");
+                    }
+                }
+                while (!list.isEmpty() && list.get(list.size() - 1).equals("null")) {
+                    list.remove(list.size() - 1);
+                }
+            } catch (Exception e) {}
+            System.out.println("[" + String.join(", ", list) + "]");
         } else if (result instanceof int[]) {
             System.out.println(Arrays.toString((int[]) result));
         } else if (result instanceof long[]) {
@@ -586,6 +899,22 @@ def outputs_match(actual: Optional[str], expected: Optional[str]) -> bool:
         if all(tokens_equal(a, e) for a, e in zip(all_act_tokens, all_exp_tokens)):
             return True
 
+    # 3. Trailing lines match (allows debug print statements before the final return value)
+    if len(act_lines) > len(exp_lines) and len(exp_lines) > 0:
+        trailing_act = "\n".join(act_lines[-len(exp_lines):])
+        val_trailing = _try_parse_val(trailing_act)
+        if val_trailing is not None and val_exp is not None and _structures_equal(val_trailing, val_exp):
+            return True
+        trailing_tokens = [t for l in act_lines[-len(exp_lines):] for t in tokenize_line(l)]
+        if len(trailing_tokens) == len(all_exp_tokens) and all(tokens_equal(a, e) for a, e in zip(trailing_tokens, all_exp_tokens)):
+            return True
+
+    # 4. In-place array modification return tolerance (LeetCode returns k vs expected array)
+    if isinstance(val_act, int) and isinstance(val_exp, list) and val_act == len(val_exp):
+        return True
+    if isinstance(val_act, list) and isinstance(val_exp, int) and len(val_act) == val_exp:
+        return True
+
     return False
 
 
@@ -683,9 +1012,22 @@ class LocalRunner:
             filepath = os.path.join(work_dir, filename)
 
             has_main_driver = ("fs.readFileSync" in code) or ("process.stdin" in code) or ("readline" in code)
+            js_structs = ""
+            if "function ListNode" not in code and "class ListNode" not in code:
+                js_structs += "function ListNode(val, next) { this.val = (val===undefined ? 0 : val); this.next = (next===undefined ? null : next); }\n"
+            if "function TreeNode" not in code and "class TreeNode" not in code:
+                js_structs += "function TreeNode(val, left, right) { this.val = (val===undefined ? 0 : val); this.left = (left===undefined ? null : left); this.right = (right===undefined ? null : right); }\n"
+
             full_code = code
             if not has_main_driver:
-                full_code = code + "\n\n" + JS_LEETCODE_HARNESS
+                declared_names = re.findall(r'(?:var|let|const|function)\s+([a-zA-Z_]\w*)', code)
+                filter_set = {"ListNode", "TreeNode", "fs", "require", "process", "Solution"}
+                custom_names = [n for n in declared_names if n not in filter_set]
+                names_json = json.dumps(custom_names)
+                harness = JS_LEETCODE_HARNESS.replace("__DETECTED_NAMES__", names_json)
+                full_code = js_structs + "\n" + code + "\n\n" + harness
+            else:
+                full_code = js_structs + "\n" + code
 
             with open(filepath, "w", encoding="utf-8") as f:
                 f.write(full_code)
@@ -710,9 +1052,27 @@ class LocalRunner:
             full_code = code
             if not has_main and has_solution:
                 # Helper to build LeetCode runner for Solution method
-                m = re.search(r'class\s+Solution\b[^{]*\{.*?public:\s*([\w:<>]+(?:\s*[*&])?)\s+(\w+)\s*\(([^)]*)\)', code, re.DOTALL)
-                if m:
-                    ret_type, method_name, params_str = m.groups()
+                sol_match = re.search(r'class\s+Solution\b[^{]*\{(.*?)\};', code, re.DOTALL)
+                chosen = None
+                if sol_match:
+                    sol_body = sol_match.group(1)
+                    pub_sections = re.findall(r'public:\s*(.*?)(?=(?:private:|protected:|\Z))', sol_body, re.DOTALL)
+                    pub_text = "\n".join(pub_sections) if pub_sections else sol_body
+                    methods = re.findall(r'([\w:<>]+(?:\s*[*&])?)\s+(\w+)\s*\(([^)]*)\)\s*\{', pub_text)
+                    if methods:
+                        common_names = {'twosum', 'threesum', 'foursum', 'solve', 'solution', 'isvalid', 'mergetwolists', 'merge', 'maxsubarray', 'lengthoflongestsubstring', 'climbstairs', 'coinchange', 'search', 'reversestring', 'movezeroes', 'removeduplicates', 'removeelement'}
+                        for cand in methods:
+                            if cand[1].lower() in common_names:
+                                chosen = cand
+                                break
+                        if not chosen:
+                            chosen = methods[0]
+                if not chosen:
+                    m = re.search(r'class\s+Solution\b[^{]*\{.*?public:\s*([\w:<>]+(?:\s*[*&])?)\s+(\w+)\s*\(([^)]*)\)', code, re.DOTALL)
+                    if m:
+                        chosen = m.groups()
+                if chosen:
+                    ret_type, method_name, params_str = chosen
                     raw_params = [p.strip() for p in params_str.split(",") if p.strip()]
 
                     cpp_driver = [
@@ -848,6 +1208,83 @@ class LocalRunner:
                         r'    std::cout << val << "\n";',
                         r'}',
                         r'',
+                        r'static void _print_res(ListNode* head) {',
+                        r'    std::cout << "[";',
+                        r'    bool first = true;',
+                        r'    while (head) {',
+                        r'        if (!first) std::cout << ", ";',
+                        r'        std::cout << head->val;',
+                        r'        first = false;',
+                        r'        head = head->next;',
+                        r'    }',
+                        r'    std::cout << "]\n";',
+                        r'}',
+                        r'',
+                        r'static void _print_res(TreeNode* root) {',
+                        r'    if (!root) { std::cout << "[]\n"; return; }',
+                        r'    std::vector<std::string> vals;',
+                        r'    std::vector<TreeNode*> q = {root};',
+                        r'    while (!q.empty()) {',
+                        r'        TreeNode* curr = q.front();',
+                        r'        q.erase(q.begin());',
+                        r'        if (curr) {',
+                        r'            vals.push_back(std::to_string(curr->val));',
+                        r'            q.push_back(curr->left);',
+                        r'            q.push_back(curr->right);',
+                        r'        } else {',
+                        r'            vals.push_back("null");',
+                        r'        }',
+                        r'    }',
+                        r'    while (!vals.empty() && vals.back() == "null") vals.pop_back();',
+                        r'    std::cout << "[";',
+                        r'    for (size_t i = 0; i < vals.size(); i++) {',
+                        r'        if (i > 0) std::cout << ", ";',
+                        r'        std::cout << vals[i];',
+                        r'    }',
+                        r'    std::cout << "]\n";',
+                        r'}',
+                        r'',
+                        r'static ListNode* _read_list_node(const std::string& raw) {',
+                        r'    std::regex num_re(R"delim(-?\d+)delim");',
+                        r'    std::sregex_iterator next(raw.begin(), raw.end(), num_re);',
+                        r'    std::sregex_iterator end;',
+                        r'    ListNode dummy(0);',
+                        r'    ListNode* curr = &dummy;',
+                        r'    while (next != end) {',
+                        r'        curr->next = new ListNode(std::stoi(next->str()));',
+                        r'        curr = curr->next;',
+                        r'        next++;',
+                        r'    }',
+                        r'    return dummy.next;',
+                        r'}',
+                        r'',
+                        r'static TreeNode* _read_tree_node(const std::string& raw) {',
+                        r'    std::regex tok_re(R"delim(-?\d+|null)delim");',
+                        r'    std::sregex_iterator next(raw.begin(), raw.end(), tok_re);',
+                        r'    std::sregex_iterator end;',
+                        r'    std::vector<std::string> tokens;',
+                        r'    while (next != end) { tokens.push_back(next->str()); next++; }',
+                        r'    if (tokens.empty() || tokens[0] == "null") return nullptr;',
+                        r'    TreeNode* root = new TreeNode(std::stoi(tokens[0]));',
+                        r'    std::vector<TreeNode*> q = {root};',
+                        r'    size_t i = 1;',
+                        r'    while (!q.empty() && i < tokens.size()) {',
+                        r'        TreeNode* curr = q.front();',
+                        r'        q.erase(q.begin());',
+                        r'        if (i < tokens.size() && tokens[i] != "null") {',
+                        r'            curr->left = new TreeNode(std::stoi(tokens[i]));',
+                        r'            q.push_back(curr->left);',
+                        r'        }',
+                        r'        i++;',
+                        r'        if (i < tokens.size() && tokens[i] != "null") {',
+                        r'            curr->right = new TreeNode(std::stoi(tokens[i]));',
+                        r'            q.push_back(curr->right);',
+                        r'        }',
+                        r'        i++;',
+                        r'    }',
+                        r'    return root;',
+                        r'}',
+                        r'',
                         r'int main() {',
                         r'    std::ios_base::sync_with_stdio(false);',
                         r'    std::cin.tie(NULL);',
@@ -863,6 +1300,41 @@ class LocalRunner:
                         r'        std::stringstream ss(raw);',
                         r'        std::string l;',
                         r'        while (std::getline(ss, l)) if (!l.empty()) parts.push_back(l);',
+                        r'    }',
+                        r'    if (parts.size() != ' + str(len(raw_params)) + r') {',
+                        r'        std::vector<std::string> topParts;',
+                        r'        std::string curr = "";',
+                        r'        int bBracket = 0, bBrace = 0, bParen = 0;',
+                        r'        char inQuote = 0;',
+                        r'        bool escaped = false;',
+                        r'        for (char ch : raw) {',
+                        r'            if (escaped) { curr += ch; escaped = false; continue; }',
+                        r'            if (ch == 92) { escaped = true; curr += ch; continue; }',
+                        r'            if (inQuote != 0) {',
+                        r'                curr += ch;',
+                        r'                if (ch == inQuote) inQuote = 0;',
+                        r'                continue;',
+                        r'            }',
+                        r'            if (ch == 34 || ch == 39) { inQuote = ch; curr += ch; continue; }',
+                        r'            if (ch == 91) bBracket++;',
+                        r'            else if (ch == 93) bBracket = std::max(0, bBracket - 1);',
+                        r'            else if (ch == 123) bBrace++;',
+                        r'            else if (ch == 125) bBrace = std::max(0, bBrace - 1);',
+                        r'            else if (ch == 40) bParen++;',
+                        r'            else if (ch == 41) bParen = std::max(0, bParen - 1);',
+                        r'            if ((ch == 44 || ch == 10 || ch == 59) && bBracket == 0 && bBrace == 0 && bParen == 0) {',
+                        r'                while (!curr.empty() && (curr.front() == 32 || curr.front() == 9)) curr.erase(curr.begin());',
+                        r'                while (!curr.empty() && (curr.back() == 32 || curr.back() == 9 || curr.back() == 10 || curr.back() == 13)) curr.pop_back();',
+                        r'                if (!curr.empty()) topParts.push_back(curr);',
+                        r'                curr = "";',
+                        r'            } else {',
+                        r'                curr += ch;',
+                        r'            }',
+                        r'        }',
+                        r'        while (!curr.empty() && (curr.front() == 32 || curr.front() == 9)) curr.erase(curr.begin());',
+                        r'        while (!curr.empty() && (curr.back() == 32 || curr.back() == 9 || curr.back() == 10 || curr.back() == 13)) curr.pop_back();',
+                        r'        if (!curr.empty()) topParts.push_back(curr);',
+                        r'        if (topParts.size() == ' + str(len(raw_params)) + r') parts = topParts;',
                         r'    }'
                     ]
                     call_args = []
@@ -886,6 +1358,10 @@ class LocalRunner:
                             cpp_driver.append(f"    auto {p_var} = _read_bool({p_str});")
                         elif "double" in param_clean or "float" in param_clean:
                             cpp_driver.append(f"    auto {p_var} = _read_double({p_str});")
+                        elif "ListNode" in param_clean:
+                            cpp_driver.append(f"    auto {p_var} = _read_list_node({p_str});")
+                        elif "TreeNode" in param_clean:
+                            cpp_driver.append(f"    auto {p_var} = _read_tree_node({p_str});")
                         elif "int" in param_clean or "long" in param_clean:
                             cpp_driver.append(f"    auto {p_var} = _read_int({p_str});")
                         else:
@@ -902,7 +1378,13 @@ class LocalRunner:
                         cpp_driver.append(f"    _print_res(res);")
                     cpp_driver.append(f"    return 0;")
                     cpp_driver.append("}")
-                    full_code = code + "\n\n" + "\n".join(cpp_driver)
+                    cpp_structs = []
+                    if "struct ListNode" not in code and "class ListNode" not in code:
+                        cpp_structs.append("struct ListNode { int val; ListNode *next; ListNode() : val(0), next(nullptr) {} ListNode(int x) : val(x), next(nullptr) {} ListNode(int x, ListNode *next) : val(x), next(next) {} };")
+                    if "struct TreeNode" not in code and "class TreeNode" not in code:
+                        cpp_structs.append("struct TreeNode { int val; TreeNode *left; TreeNode *right; TreeNode() : val(0), left(nullptr), right(nullptr) {} TreeNode(int x) : val(x), left(nullptr), right(nullptr) {} TreeNode(int x, TreeNode *left, TreeNode *right) : val(x), left(left), right(right) {} };")
+                    cpp_header = ("\n".join(cpp_structs) + "\n\n") if cpp_structs else ""
+                    full_code = cpp_header + code + "\n\n" + "\n".join(cpp_driver)
 
             with open(src_path, "w", encoding="utf-8") as f:
                 f.write(full_code)
@@ -923,14 +1405,36 @@ class LocalRunner:
             has_main = bool(re.search(r'public\s+static\s+void\s+main', clean_code))
             has_solution = bool(re.search(r'class\s+Solution\b', clean_code))
 
+            java_structs = []
+            if "class ListNode" not in clean_code:
+                java_structs.append("class ListNode { int val; ListNode next; ListNode() {} ListNode(int val) { this.val = val; } ListNode(int val, ListNode next) { this.val = val; this.next = next; } }")
+            if "class TreeNode" not in clean_code:
+                java_structs.append("class TreeNode { int val; TreeNode left; TreeNode right; TreeNode() {} TreeNode(int val) { this.val = val; } TreeNode(int val, TreeNode left, TreeNode right) { this.val = val; this.left = left; this.right = right; } }")
+            java_header = ("\n".join(java_structs) + "\n\n") if java_structs else ""
+
             if not has_main and has_solution:
                 adapted_code = re.sub(r'public\s+class\s+Solution\b', 'class Solution', clean_code)
+                # In Java, all import statements MUST precede any class / interface declarations.
+                # Extract all user imports and hoist them to the top of the compilation unit.
+                user_imports = []
+                user_body_lines = []
+                for line in adapted_code.splitlines():
+                    if re.match(r'^\s*import\s+', line):
+                        user_imports.append(line.strip())
+                    else:
+                        user_body_lines.append(line)
+
+                user_body = "\n".join(user_body_lines)
+                user_imports_str = "\n".join(user_imports)
+
                 full_code = (
                     "import java.io.*;\n"
                     "import java.util.*;\n"
                     "import java.util.regex.*;\n"
-                    "import java.lang.reflect.*;\n\n"
-                    + adapted_code
+                    "import java.lang.reflect.*;\n"
+                    + (user_imports_str + "\n\n" if user_imports_str else "\n")
+                    + java_header
+                    + user_body
                     + "\n\n"
                     + JAVA_LEETCODE_RUNNER
                 )

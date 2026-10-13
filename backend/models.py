@@ -76,6 +76,7 @@ class Problem(Base):
     title = Column(String(255), nullable=False)                     # Short problem title
     description = Column(Text, nullable=False)                      # Full problem statement
     difficulty = Column(String(20), default="medium")               # easy / medium / hard
+    code_snippets = Column(JSON, nullable=True)                     # Starter code snippets mapped by language
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationship: one problem can have many sessions (submissions)

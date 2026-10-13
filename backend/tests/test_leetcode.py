@@ -195,3 +195,223 @@ public:
     res_cpp = await code_runner.run_test(cpp_code, "cpp", 1, stdin_input, expected)
     assert res_cpp.passed is True
 
+
+@pytest.mark.asyncio
+async def test_leetcode_debug_print_and_helper_methods():
+    """Verify debug print statements and helper methods defined before main method do not break execution."""
+    from pipeline.code_runner import code_runner
+
+    # 1. Python with helper method defined before twoSum AND debug print
+    py_code = """
+class Solution:
+    def helper_double(self, x: int) -> int:
+        return x * 2
+
+    def twoSum(self, nums: list[int], target: int) -> list[int]:
+        print("DEBUG: Checking nums", nums, "target", target)
+        d = {}
+        for i, n in enumerate(nums):
+            if target - n in d:
+                return [d[target - n], i]
+            d[n] = i
+        return []
+"""
+    res = await code_runner.run_test(py_code, "python", 1, "nums = [2,7,11,15], target = 9", "[0, 1]")
+    assert res.passed is True
+    assert "DEBUG: Checking nums" in res.actual_stdout
+
+    # 2. JavaScript with helper method defined before twoSum AND console.log
+    js_code = """
+class Solution {
+    computeHash(n) {
+        return n;
+    }
+    twoSum(nums, target) {
+        console.log("DEBUG JS LOG");
+        const map = new Map();
+        for (let i = 0; i < nums.length; i++) {
+            const diff = target - nums[i];
+            if (map.has(diff)) return [map.get(diff), i];
+            map.set(nums[i], i);
+        }
+        return [];
+    }
+}
+"""
+    res_js = await code_runner.run_test(js_code, "javascript", 1, "[2,7,11,15], 9", "[0, 1]")
+    assert res_js.passed is True
+    assert "DEBUG JS LOG" in res_js.actual_stdout
+
+    # 3. Java with helper method defined before twoSum
+    java_code = """
+import java.util.*;
+
+class Solution {
+    public int calc(int a) { return a + 1; }
+
+    public int[] twoSum(int[] nums, int target) {
+        System.out.println("DEBUG JAVA OUT");
+        Map<Integer, Integer> map = new HashMap<>();
+        for (int i = 0; i < nums.length; i++) {
+            int comp = target - nums[i];
+            if (map.containsKey(comp)) return new int[] { map.get(comp), i };
+            map.put(nums[i], i);
+        }
+        return new int[0];
+    }
+}
+"""
+    res_java = await code_runner.run_test(java_code, "java", 1, "[2,7,11,15], 9", "[0, 1]")
+    assert res_java.passed is True
+    assert "DEBUG JAVA OUT" in res_java.actual_stdout
+
+    # 4. In-place modification integer return tolerance (removeDuplicates returning k)
+    py_remove_dup = """
+class Solution:
+    def removeDuplicates(self, nums: list[int]) -> int:
+        if not nums: return 0
+        k = 1
+        for i in range(1, len(nums)):
+            if nums[i] != nums[i - 1]:
+                nums[k] = nums[i]
+                k += 1
+        return k
+"""
+    res_dup = await code_runner.run_test(py_remove_dup, "python", 1, "nums = [1,1,2]", "[1, 2]")
+    assert res_dup.passed is True
+
+
+@pytest.mark.asyncio
+async def test_leetcode_linked_list_and_tree_execution():
+    """Verify ListNode and TreeNode algorithms execute and serialize correctly across languages."""
+    from pipeline.code_runner import code_runner
+
+    # 1. Python: Reverse Linked List
+    py_ll = """
+class Solution:
+    def reverseList(self, head: Optional[ListNode]) -> Optional[ListNode]:
+        prev = None
+        curr = head
+        while curr:
+            nxt = curr.next
+            curr.next = prev
+            prev = curr
+            curr = nxt
+        return prev
+"""
+    res_py = await code_runner.run_test(py_ll, "python", 1, "head = [1, 2, 3, 4, 5]", "[5, 4, 3, 2, 1]")
+    assert res_py.passed is True
+
+    # 2. JavaScript: Reverse Linked List
+    js_ll = """
+var reverseList = function(head) {
+    let prev = null;
+    let curr = head;
+    while (curr) {
+        let nxt = curr.next;
+        curr.next = prev;
+        prev = curr;
+        curr = nxt;
+    }
+    return prev;
+};
+"""
+    res_js = await code_runner.run_test(js_ll, "javascript", 1, "head = [1, 2, 3, 4, 5]", "[5, 4, 3, 2, 1]")
+    assert res_js.passed is True
+
+    # 3. Java: Reverse Linked List
+    java_ll = """
+class Solution {
+    public ListNode reverseList(ListNode head) {
+        ListNode prev = null;
+        ListNode curr = head;
+        while (curr != null) {
+            ListNode nxt = curr.next;
+            curr.next = prev;
+            prev = curr;
+            curr = nxt;
+        }
+        return prev;
+    }
+}
+"""
+    res_java = await code_runner.run_test(java_ll, "java", 1, "head = [1, 2, 3, 4, 5]", "[5, 4, 3, 2, 1]")
+    assert res_java.passed is True
+
+    # 4. C++: Reverse Linked List
+    cpp_ll = """
+class Solution {
+public:
+    ListNode* reverseList(ListNode* head) {
+        ListNode* prev = nullptr;
+        ListNode* curr = head;
+        while (curr) {
+            ListNode* nxt = curr->next;
+            curr->next = prev;
+            prev = curr;
+            curr = nxt;
+        }
+        return prev;
+    }
+};
+"""
+    res_cpp = await code_runner.run_test(cpp_ll, "cpp", 1, "head = [1, 2, 3, 4, 5]", "[5, 4, 3, 2, 1]")
+    assert res_cpp.passed is True
+
+    # 5. Python: Invert Binary Tree
+    py_tree = """
+class Solution:
+    def invertTree(self, root: Optional[TreeNode]) -> Optional[TreeNode]:
+        if not root: return None
+        root.left, root.right = self.invertTree(root.right), self.invertTree(root.left)
+        return root
+"""
+    res_py_tree = await code_runner.run_test(py_tree, "python", 1, "root = [4, 2, 7, 1, 3, 6, 9]", "[4, 7, 2, 9, 6, 3, 1]")
+    assert res_py_tree.passed is True
+
+    # 6. JavaScript: Invert Binary Tree
+    js_tree = """
+var invertTree = function(root) {
+    if (!root) return null;
+    let tmp = root.left;
+    root.left = invertTree(root.right);
+    root.right = invertTree(tmp);
+    return root;
+};
+"""
+    res_js_tree = await code_runner.run_test(js_tree, "javascript", 1, "root = [4, 2, 7, 1, 3, 6, 9]", "[4, 7, 2, 9, 6, 3, 1]")
+    assert res_js_tree.passed is True
+
+    # 7. Java: Invert Binary Tree
+    java_tree = """
+class Solution {
+    public TreeNode invertTree(TreeNode root) {
+        if (root == null) return null;
+        TreeNode tmp = root.left;
+        root.left = invertTree(root.right);
+        root.right = invertTree(tmp);
+        return root;
+    }
+}
+"""
+    res_java_tree = await code_runner.run_test(java_tree, "java", 1, "root = [4, 2, 7, 1, 3, 6, 9]", "[4, 7, 2, 9, 6, 3, 1]")
+    assert res_java_tree.passed is True
+
+    # 8. C++: Invert Binary Tree
+    cpp_tree = """
+class Solution {
+public:
+    TreeNode* invertTree(TreeNode* root) {
+        if (!root) return nullptr;
+        TreeNode* tmp = root->left;
+        root->left = invertTree(root->right);
+        root->right = invertTree(tmp);
+        return root;
+    }
+};
+"""
+    res_cpp_tree = await code_runner.run_test(cpp_tree, "cpp", 1, "root = [4, 2, 7, 1, 3, 6, 9]", "[4, 7, 2, 9, 6, 3, 1]")
+    assert res_cpp_tree.passed is True
+
+
+

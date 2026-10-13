@@ -126,6 +126,7 @@ class ProblemCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=255, description="Problem title")
     description: str = Field(..., min_length=1, description="Full problem statement")
     difficulty: Difficulty = Field(Difficulty.MEDIUM, description="Difficulty level")
+    code_snippets: Optional[Dict[str, str]] = Field(None, description="Starter code snippets mapped by language")
 
 
 class ProblemResponse(BaseModel):
@@ -134,6 +135,7 @@ class ProblemResponse(BaseModel):
     title: str
     description: str
     difficulty: str
+    code_snippets: Optional[Dict[str, str]] = None
     created_at: datetime
     session_count: Optional[int] = 0  # Number of submissions for this problem
     model_config = ConfigDict(from_attributes=True)
@@ -198,8 +200,8 @@ class TestResultDetail(BaseModel):
     stdin: str
     expected_stdout: str
     actual_stdout: Optional[str] = None
-    passed: bool
-    is_edge_case: bool
+    passed: Optional[bool] = None
+    is_edge_case: bool = False
     time_ms: Optional[float] = None
     stderr: Optional[str] = None
 
@@ -618,4 +620,28 @@ class LeetCodeProblemDetailResponse(BaseModel):
     sample_test_cases: List[Dict[str, Any]] = []
     hints: List[str] = []
     problem_id: Optional[int] = Field(None, description="Database problem ID if persisted")
+
+
+class ProblemGenerateRequest(BaseModel):
+    """Request payload to generate a full LeetCode problem specification with AI."""
+    prompt: str = Field(..., min_length=1, description="Problem concept, title, or statement")
+    difficulty: Optional[str] = Field("medium", description="Desired difficulty: easy, medium, hard")
+
+
+class ProblemGenerateTestCase(BaseModel):
+    test_case_id: str
+    description: str
+    stdin: str
+    expected_stdout: str
+    is_edge_case: bool = False
+
+
+class ProblemGenerateResponse(BaseModel):
+    """AI-generated LeetCode problem specification with full templates and test cases."""
+    title: str
+    difficulty: str
+    description: str
+    method_name: str
+    code_snippets: Dict[str, str] = {}
+    sample_test_cases: List[ProblemGenerateTestCase] = []
 

@@ -64,10 +64,18 @@ const ApiClient = {
     },
 
     /** Create a new problem */
-    async createProblem(title, description, difficulty = 'medium') {
+    async createProblem(title, description, difficulty = 'medium', codeSnippets = null) {
         return this._fetch('/problems', {
             method: 'POST',
-            body: JSON.stringify({ title, description, difficulty }),
+            body: JSON.stringify({ title, description, difficulty, code_snippets: codeSnippets }),
+        });
+    },
+
+    /** Generate a full LeetCode problem specification with AI */
+    async generateProblem(prompt, difficulty = 'medium') {
+        return this._fetch('/problems/generate', {
+            method: 'POST',
+            body: JSON.stringify({ prompt, difficulty }),
         });
     },
 

@@ -577,7 +577,15 @@ The production-ready reference solution is loaded in the **center code editor**.
 
         try {
             if (typeof Toast !== 'undefined') Toast.info('Creating problem and transferring to Evaluation IDE...');
-            const problemRes = await ApiClient.createProblem(title, formattedDesc, difficulty);
+            const methodCamel = title.replace(/[^a-zA-Z0-9\s]/g, '').trim().split(/\s+/).map((w, i) => i === 0 ? w.toLowerCase() : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join('') || 'solve';
+            const snippets = {
+                python: lang === 'python' ? code : `class Solution:\n    def ${methodCamel}(self):\n        # Implement your solution\n        pass\n`,
+                cpp: lang === 'cpp' ? code : `#include <iostream>\n#include <vector>\n#include <string>\nusing namespace std;\n\nclass Solution {\npublic:\n    void ${methodCamel}() {\n        // Implement your solution\n    }\n};\n`,
+                java: lang === 'java' ? code : `import java.util.*;\n\nclass Solution {\n    public void ${methodCamel}() {\n        // Implement your solution\n    }\n}\n`,
+                javascript: lang === 'javascript' ? code : `/**\n * @return {void}\n */\nvar ${methodCamel} = function() {\n    // Implement your solution\n};\n`
+            };
+
+            const problemRes = await ApiClient.createProblem(title, formattedDesc, difficulty, snippets);
             const sessionRes = await ApiClient.createSession({
                 problem_id: problemRes.problem_id,
                 language: lang,

@@ -226,3 +226,65 @@ class PromptBuilder:
             )
         }
         return json.dumps(payload, indent=2)
+
+    PROBLEM_GENERATION_SYSTEM_INSTRUCTION = (
+        "You are an expert LeetCode problem designer and competitive programming architect. "
+        "Your task is to take any concept, title, or draft description and generate an authentic, "
+        "production-grade LeetCode problem specification with full multi-language starter code templates "
+        "(class Solution for Python, C++, Java, JS), method signatures, public sample test cases, and private edge test cases.\n\n"
+        "RULES:\n"
+        "1. Parameter names, parameter counts, and parameter types MUST be identical across Python, C++, Java, and JavaScript.\n"
+        "2. The method name MUST be idiomatic camelCase (e.g., 'twoSum', 'maxSubArray', 'isPalindrome').\n"
+        "3. In each starter template, provide the complete class Solution with method signature and stub return/pass.\n"
+        "4. In test cases, 'stdin' MUST use parameter assignments (e.g. 'nums = [2,7,11,15], target = 9' or 's = \"racecar\"') that match the method's parameter names.\n"
+        "5. In test cases, 'expected_stdout' MUST be the exact JSON return value (e.g., '[0, 1]', 'true', '42', '\"racecar\"').\n"
+        "6. Provide 4-6 test cases: 2 public sample cases (is_edge_case: false) and 2-3 edge/boundary cases (is_edge_case: true) like empty/minimal inputs, duplicates, or negative bounds.\n"
+        "7. You MUST respond ONLY with a single valid JSON object."
+    )
+
+    @staticmethod
+    def build_problem_generation_prompt(
+        prompt: str,
+        difficulty: Optional[str] = "medium"
+    ) -> str:
+        """
+        Build JSON request prompt for AI-generated LeetCode problem specifications and templates.
+        """
+        payload = {
+            "type": "generate_problem",
+            "concept_or_title": prompt,
+            "target_difficulty": difficulty or "medium",
+            "instructions": (
+                "Create a complete, authentic LeetCode-style problem specification based on the prompt.\n"
+                "Output JSON MUST conform strictly to this structure:\n"
+                "{\n"
+                '  "title": "Problem Title",\n'
+                '  "difficulty": "easy" | "medium" | "hard",\n'
+                '  "description": "### Problem Title\\n\\nProblem statement...\\n\\n#### Example 1:\\n**Input:** nums = [2,7,11,15], target = 9\\n**Output:** [0,1]\\n**Explanation:** ...\\n\\n#### Constraints:\\n- ...",\n'
+                '  "method_name": "methodName",\n'
+                '  "code_snippets": {\n'
+                '    "python": "class Solution:\\n    def methodName(self, nums: List[int], target: int) -> List[int]:\\n        pass\\n",\n'
+                '    "cpp": "#include <vector>\\nusing namespace std;\\n\\nclass Solution {\\npublic:\\n    vector<int> methodName(vector<int>& nums, int target) {\\n        return {};\\n    }\\n};\\n",\n'
+                '    "java": "import java.util.*;\\n\\nclass Solution {\\n    public int[] methodName(int[] nums, int target) {\\n        return new int[0];\\n    }\\n}\\n",\n'
+                '    "javascript": "/**\\n * @param {number[]} nums\\n * @param {number} target\\n * @return {number[]}\\n */\\nvar methodName = function(nums, target) {\\n    return [];\\n};\\n"\n'
+                '  },\n'
+                '  "sample_test_cases": [\n'
+                '    {\n'
+                '      "test_case_id": "Case 1",\n'
+                '      "description": "Example 1",\n'
+                '      "stdin": "nums = [2,7,11,15], target = 9",\n'
+                '      "expected_stdout": "[0, 1]",\n'
+                '      "is_edge_case": false\n'
+                '    },\n'
+                '    {\n'
+                '      "test_case_id": "Case 2",\n'
+                '      "description": "Edge Case - Minimal constraints",\n'
+                '      "stdin": "nums = [3,3], target = 6",\n'
+                '      "expected_stdout": "[0, 1]",\n'
+                '      "is_edge_case": true\n'
+                '    }\n'
+                '  ]\n'
+                "}"
+            )
+        }
+        return json.dumps(payload, indent=2)

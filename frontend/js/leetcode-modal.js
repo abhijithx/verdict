@@ -495,9 +495,23 @@ const LeetCodeModal = {
         try {
             if (typeof Toast !== 'undefined') Toast.info('Creating problem and transferring to Evaluation IDE...');
             
-            // Create problem
-            const pRes = await ApiClient.createProblem(canonicalTitle, prob.description, difficulty);
+            // Normalize all language snippets
+            const rawSnippets = prob.code_snippets || {};
+            const normalizedSnippets = {
+                python: rawSnippets.python3 || rawSnippets.python || '',
+                cpp: rawSnippets.cpp || rawSnippets['c++'] || '',
+                java: rawSnippets.java || '',
+                javascript: rawSnippets.javascript || rawSnippets.js || ''
+            };
+
+            // Create problem with all code snippets
+            const pRes = await ApiClient.createProblem(canonicalTitle, prob.description, difficulty, normalizedSnippets);
             
+            // Cache snippets for this problem locally
+            try {
+                localStorage.setItem(`verdict_snippets_${pRes.problem_id}`, JSON.stringify(normalizedSnippets));
+            } catch (e) {}
+
             // Create session
             const sRes = await ApiClient.createSession({
                 problem_id: pRes.problem_id,

@@ -270,23 +270,35 @@ async def dry_run_session(
         stdout = "\n".join(stdout_parts) if stdout_parts else None
         error_line = first_err_line
 
-        # Persist test cases to GeneratedTestCase for this session if not already stored
-        existing_tcs_res = await db.execute(
-            select(GeneratedTestCase).where(GeneratedTestCase.session_id == session_id)
-        )
-        existing_tcs = list(existing_tcs_res.scalars().all())
-        if not existing_tcs:
-            for tc_obj in test_case_objs:
-                new_tc = GeneratedTestCase(
-                    session_id=session_id,
-                    test_case_id=tc_obj.test_case_id,
-                    description=tc_obj.description,
-                    stdin=tc_obj.stdin,
-                    expected_stdout=tc_obj.expected_stdout,
-                    is_edge_case=tc_obj.is_edge_case,
-                )
-                db.add(new_tc)
-            await db.commit()
+        # Persist / update test cases and execution results for this session
+        from sqlalchemy import delete
+        await db.execute(delete(ExecutionResult).where(ExecutionResult.session_id == session_id))
+        await db.execute(delete(GeneratedTestCase).where(GeneratedTestCase.session_id == session_id))
+        new_tcs = []
+        for tc_obj in test_case_objs:
+            new_tc = GeneratedTestCase(
+                session_id=session_id,
+                test_case_id=tc_obj.test_case_id,
+                description=tc_obj.description,
+                stdin=tc_obj.stdin,
+                expected_stdout=tc_obj.expected_stdout,
+                is_edge_case=tc_obj.is_edge_case,
+            )
+            db.add(new_tc)
+            new_tcs.append(new_tc)
+        await db.flush()
+
+        for tc_rec, er in zip(new_tcs, exec_results):
+            db_er = ExecutionResult(
+                session_id=session_id,
+                test_id=tc_rec.test_id,
+                passed=er.passed,
+                actual_stdout=er.actual_stdout,
+                stderr=er.stderr,
+                time_ms=er.time_ms,
+            )
+            db.add(db_er)
+        await db.commit()
 
     # 2. Single stdin run
     elif submission.stdin is not None and submission.stdin != "":
@@ -302,6 +314,32 @@ async def dry_run_session(
         time_ms = exec_res.get("time_ms", 0.0)
         passed = (rc == 0)
         error_line = parse_error_line(stderr, session.language) if (stderr and rc != 0) else None
+
+        from sqlalchemy import delete
+        await db.execute(delete(ExecutionResult).where(ExecutionResult.session_id == session_id))
+        await db.execute(delete(GeneratedTestCase).where(GeneratedTestCase.session_id == session_id))
+        custom_tc = GeneratedTestCase(
+            session_id=session_id,
+            test_case_id="Case 1",
+            description="Custom Input Run",
+            stdin=submission.stdin,
+            expected_stdout="",
+            is_edge_case=False,
+        )
+        db.add(custom_tc)
+        await db.flush()
+
+        db_er = ExecutionResult(
+            session_id=session_id,
+            test_id=custom_tc.test_id,
+            passed=passed,
+            actual_stdout=stdout,
+            stderr=stderr,
+            time_ms=time_ms,
+        )
+        db.add(db_er)
+        await db.commit()
+
         test_result_details = [
             TestResultDetail(
                 test_case_id="Case 1",
@@ -455,6 +493,35 @@ async def run_session_tests(
 
     total = len(test_case_objs)
     all_passed = (passed_count == total)
+
+    from sqlalchemy import delete
+    await db.execute(delete(ExecutionResult).where(ExecutionResult.session_id == session_id))
+    await db.execute(delete(GeneratedTestCase).where(GeneratedTestCase.session_id == session_id))
+    new_tcs = []
+    for tc_obj in test_case_objs:
+        new_tc = GeneratedTestCase(
+            session_id=session_id,
+            test_case_id=tc_obj.test_case_id,
+            description=tc_obj.description,
+            stdin=tc_obj.stdin,
+            expected_stdout=tc_obj.expected_stdout,
+            is_edge_case=tc_obj.is_edge_case,
+        )
+        db.add(new_tc)
+        new_tcs.append(new_tc)
+    await db.flush()
+
+    for tc_rec, er in zip(new_tcs, exec_results):
+        db_er = ExecutionResult(
+            session_id=session_id,
+            test_id=tc_rec.test_id,
+            passed=er.passed,
+            actual_stdout=er.actual_stdout,
+            stderr=er.stderr,
+            time_ms=er.time_ms,
+        )
+        db.add(db_er)
+    await db.commit()
 
     return RunTestsResponse(
         passed=all_passed,
@@ -691,7 +758,7 @@ async def get_session(
             stdin=tc.stdin,
             expected_stdout=tc.expected_stdout,
             actual_stdout=er.actual_stdout if er else None,
-            passed=er.passed if er else False,
+            passed=er.passed if er else None,
             is_edge_case=tc.is_edge_case,
             time_ms=er.time_ms if er else None,
             stderr=er.stderr if er else None,
