@@ -2144,6 +2144,43 @@ body { -webkit-tap-highlight-color: transparent; }
     font-weight: 600;
     box-shadow: 0 1px 4px rgba(0, 122, 204, 0.25);
 }
+.lc-case-tab-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    margin-left: 6px;
+    margin-right: -4px;
+    border-radius: 4px;
+    font-size: 13px;
+    line-height: 1;
+    color: #71717a;
+    transition: all 0.15s ease;
+}
+.lc-case-tab-close:hover {
+    color: #ffffff;
+    background: rgba(244, 63, 94, 0.25);
+}
+.lc-case-tab-add {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5px 10px;
+    border-radius: 6px;
+    background: #242426;
+    border: 1px dashed rgba(255, 255, 255, 0.15);
+    color: #a1a1aa;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.lc-case-tab-add:hover {
+    color: #ffffff;
+    background: #2e2e32;
+    border-color: #007acc;
+}
 
 /* Console Textareas */
 #lc-case-stdin,

@@ -873,11 +873,12 @@
                         <!-- Tab 1: Testcase Input -->
                         <div id="panel-testcase" class="btm-content active p-4 space-y-3">
                             <div class="flex items-center justify-between">
-                                <div id="lc-case-tabs-container" class="flex items-center gap-2">
+                                <div id="lc-case-tabs-container" class="flex items-center gap-2 overflow-x-auto">
                                     <button class="lc-case-tab active" onclick="SessionView.selectTestCase(0)">Case 1</button>
-                                    <button class="lc-case-tab" onclick="SessionView.selectTestCase(1)">Case 2</button>
-                                    <button class="lc-case-tab" onclick="SessionView.selectTestCase(2)">Case 3</button>
-                                    <button class="lc-case-tab" onclick="SessionView.addCustomTestCase()">+</button>
+                                    <button class="lc-case-tab-add" onclick="SessionView.addCustomTestCase()">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="mr-1"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                        <span>Add Case</span>
+                                    </button>
                                 </div>
                                 <div class="text-2xs text-text-tertiary font-mono hidden sm:block">
                                     Configure inputs & expected outputs

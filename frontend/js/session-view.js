@@ -405,8 +405,13 @@ const SessionView = {
                     </div>
                 </div>
 
-                <div class="flex items-center gap-2 border-b border-white/5 pb-2 overflow-x-auto">
-                    ${tabsHtml}
+                <div class="flex items-center justify-between gap-2 border-b border-white/5 pb-2 overflow-x-auto">
+                    <div class="flex items-center gap-2">
+                        ${tabsHtml}
+                    </div>
+                    <button class="lc-run-btn !h-6 !px-2 text-2xs text-[#38bdf8] hover:bg-[#007acc]/20 shrink-0 ml-auto border border-[#007acc]/30" onclick="SessionView.switchConsoleTab('testcase'); SessionView.selectTestCase(${selectedIdx});" title="Edit this test case's inputs or expected outputs">
+                        ✏️ Edit in Testcase
+                    </button>
                 </div>
 
                 ${currentTc.description ? `
@@ -416,7 +421,10 @@ const SessionView = {
                 ` : ''}
 
                 <div>
-                    <div class="text-xs font-mono text-text-tertiary mb-1">Standard Input (stdin):</div>
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-xs font-mono text-text-tertiary">Standard Input (stdin):</span>
+                        <button class="text-2xs font-mono text-[#38bdf8] hover:underline" onclick="SessionView.switchConsoleTab('testcase'); SessionView.selectTestCase(${selectedIdx});">edit ↗</button>
+                    </div>
                     <pre class="bg-[#1e1e1e] p-2.5 rounded text-xs font-mono text-[#9cdcfe] whitespace-pre-wrap border border-white/5">${this._esc(currentTc.stdin || '(empty)')}</pre>
                 </div>
 
@@ -452,6 +460,22 @@ const SessionView = {
 
     onCodeChange() {
         this._lastRunPassed = false;
+        const staleWarning = document.getElementById('analysis-stale-warning');
+        if (!staleWarning) {
+            const chatThread = document.getElementById('chat-thread');
+            if (chatThread && chatThread.innerHTML.trim() !== '' && !chatThread.innerHTML.includes('Click <strong')) {
+                const warningHTML = `
+                    <div id="analysis-stale-warning" class="mb-4 p-3 rounded-lg bg-[#f59e0b]/10 border border-[#f59e0b]/20 text-[#f59e0b] text-[13px] font-mono flex flex-wrap items-center justify-between gap-3">
+                        <div class="flex items-center gap-2">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                            <span>Code has been modified. Analysis is now stale.</span>
+                        </div>
+                        <button onclick="SessionView.submit()" class="px-2.5 py-1 rounded bg-[#f59e0b]/20 hover:bg-[#f59e0b]/30 text-[#f59e0b] transition-colors font-semibold">Re-evaluate</button>
+                    </div>
+                `;
+                chatThread.insertAdjacentHTML('afterbegin', warningHTML);
+            }
+        }
     },
 
     onLanguageChange(lang) {
@@ -466,14 +490,18 @@ const SessionView = {
 
         let cases = this._testCases;
         if (!cases || cases.length === 0) {
-            cases = [{ test_id: 1, stdin: '', expected_stdout: '' }];
+            cases = [{ test_id: 1, test_case_id: 'Case 1', description: 'Case 1', stdin: '', expected_stdout: '' }];
             this._testCases = cases;
+        }
+
+        if (this._selectedTestCaseIndex >= cases.length) {
+            this._selectedTestCaseIndex = Math.max(0, cases.length - 1);
         }
 
         let tabsHtml = '';
         cases.forEach((tc, idx) => {
             const isActive = idx === this._selectedTestCaseIndex;
-            const canRemove = cases.length > 1 && idx > 0;
+            const canRemove = cases.length > 1;
             const isPass = tc.passed === true;
             const isFail = tc.passed === false;
             let statusDot = '';
@@ -481,13 +509,13 @@ const SessionView = {
             else if (isFail) statusDot = '<span class="w-1.5 h-1.5 rounded-full bg-[#f43f5e] mr-1.5 inline-block"></span>';
 
             tabsHtml += `
-                <div class="relative inline-flex items-center">
-                    <button class="lc-case-tab ${isActive ? 'active' : ''} ${canRemove ? '!pr-6' : ''}" onclick="SessionView.selectTestCase(${idx})">
+                <div class="relative inline-flex items-center group">
+                    <button class="lc-case-tab ${isActive ? 'active' : ''} ${canRemove ? '!pr-7' : ''}" onclick="SessionView.selectTestCase(${idx})">
                         ${statusDot}Case ${idx + 1}
                     </button>
                     ${canRemove ? `
-                        <button class="absolute right-1 text-xs text-text-tertiary hover:text-[#f43f5e] px-1 py-0.5" onclick="event.stopPropagation(); SessionView.removeTestCase(${idx})" title="Remove Case ${idx + 1}">
-                            ×
+                        <button class="lc-case-tab-close absolute right-1.5 text-xs text-text-tertiary hover:text-white hover:bg-[#f43f5e]/80 rounded p-0.5 transition-colors" onclick="event.stopPropagation(); SessionView.removeTestCase(${idx})" title="Remove Case ${idx + 1}">
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                         </button>
                     ` : ''}
                 </div>
@@ -495,8 +523,9 @@ const SessionView = {
         });
 
         tabsHtml += `
-            <button class="lc-case-tab text-text-tertiary hover:text-white" onclick="SessionView.addCustomTestCase()" title="Add Custom Testcase">
-                +
+            <button class="lc-case-tab-add" onclick="SessionView.addCustomTestCase()" title="Add New Testcase">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="mr-1"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                <span>Add Case</span>
             </button>
         `;
 
@@ -541,7 +570,10 @@ const SessionView = {
     },
 
     removeTestCase(idx) {
-        if (!this._testCases || this._testCases.length <= 1) return;
+        if (!this._testCases || this._testCases.length <= 1) {
+            if (typeof Toast !== 'undefined') Toast.warning('You must keep at least one testcase.');
+            return;
+        }
         this._testCases.splice(idx, 1);
         if (this._selectedTestCaseIndex >= this._testCases.length) {
             this._selectedTestCaseIndex = this._testCases.length - 1;
@@ -560,11 +592,17 @@ const SessionView = {
             if (outputArea) this._testCases[this._selectedTestCaseIndex].expected_stdout = outputArea.value;
         }
         const newId = this._testCases.length + 1;
-        this._testCases.push({ test_id: newId, test_case_id: `Case ${newId}`, description: `Custom Case ${newId}`, stdin: '', expected_stdout: '' });
+        this._testCases.push({
+            test_id: newId,
+            test_case_id: `Case ${newId}`,
+            description: `Custom Case ${newId}`,
+            stdin: '',
+            expected_stdout: ''
+        });
         this._selectedTestCaseIndex = this._testCases.length - 1;
         this._lastRunPassed = false;
         this._renderTestCaseTabs();
-        if (typeof Toast !== 'undefined') Toast.info(`Added Case ${newId}. You can enter custom stdin input and expected output.`);
+        if (typeof Toast !== 'undefined') Toast.info(`Added Case ${newId}. You can enter stdin input and expected output.`);
         const inputArea = document.getElementById('lc-case-stdin');
         if (inputArea) inputArea.focus();
     },

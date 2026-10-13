@@ -683,7 +683,8 @@ The production-ready reference solution is loaded in the **center code editor**.
                 const chips = suggestions.map(s => {
                     const cleanS = (typeof s === 'string' ? s : '').trim();
                     if (!cleanS) return '';
-                    return `<button class="rec-suggestion-chip" onclick="RecommendationUI.sendQuickPrompt(${JSON.stringify(cleanS)})">👉 ${this.escapeHtml(cleanS)}</button>`;
+                    const safeCleanS = JSON.stringify(cleanS).replace(/"/g, '&quot;');
+                    return `<button class="rec-suggestion-chip" onclick="RecommendationUI.sendQuickPrompt(${safeCleanS})">👉 ${this.escapeHtml(cleanS)}</button>`;
                 }).filter(Boolean).join('');
 
                 if (chips) {

@@ -123,7 +123,15 @@ async def analyze_code(
             labels=["Time", "Space"],
             datasets=[GeminiChartDataset(label="Solution", values=[1.0, 1.0])]
         ),
-        optimization_suggestions=["Code logic passed verified test execution."],
+        optimization_suggestions=[
+            "Consider memory locality and cache-friendly data structures to improve constant factors.",
+            "Analyze trade-offs between O(N) space hash-maps and O(1) space two-pointer approaches.",
+            "Verify behavior under maximum constraints and deeply nested recursive states."
+        ] if all_passed else [
+            "Review failing test cases and handle boundary conditions appropriately.",
+            "Check for off-by-one errors or unhandled empty inputs.",
+            "Ensure the time complexity meets the expected bounds for larger inputs."
+        ],
         code_explanation="Verified code execution completed using standard test suite.",
         quality_score=90,
         readability_score=85,
