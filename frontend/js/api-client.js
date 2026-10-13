@@ -71,11 +71,16 @@ const ApiClient = {
         });
     },
 
-    /** Generate a full LeetCode problem specification with AI */
-    async generateProblem(prompt, difficulty = 'medium') {
+    /** Generate or refine a full LeetCode problem specification with AI */
+    async generateProblem(prompt, difficulty = 'medium', feedback = null, previousProblem = null) {
         return this._fetch('/problems/generate', {
             method: 'POST',
-            body: JSON.stringify({ prompt, difficulty }),
+            body: JSON.stringify({
+                prompt,
+                difficulty,
+                feedback: feedback || null,
+                previous_problem: previousProblem || null,
+            }),
         });
     },
 

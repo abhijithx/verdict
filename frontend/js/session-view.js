@@ -68,7 +68,6 @@ const SessionView = {
             if (langSelect) langSelect.value = this._language;
 
             // Set Editor Code - check local cache, session code, or initial starter template
-            const editor = MonacoSetup.getEditor();
             let initialCode = session.code || '';
             try {
                 const savedCode = localStorage.getItem(`verdict_code_${sessionId}_${this._language}`);
@@ -77,13 +76,21 @@ const SessionView = {
                 }
             } catch (e) {}
 
-            if (this._isCodeEmpty(initialCode, this._language)) {
+            const isLegacyStdinBoilerplate = (code) => {
+                if (!code) return true;
+                return code.includes('sys.stdin.read') ||
+                       code.includes('cin >> token') ||
+                       code.includes('Scanner sc = new Scanner') ||
+                       code.includes('fs.readFileSync(0') ||
+                       (code.includes('def solve():') && code.includes("__name__ == '__main__'"));
+            };
+
+            if (this._isCodeEmpty(initialCode, this._language) || isLegacyStdinBoilerplate(initialCode)) {
                 initialCode = this._getStarterCode(this._language, session.problem);
             }
             this._codeByLang[this._language] = initialCode;
-            if (editor) {
-                editor.setValue(initialCode);
-            }
+            MonacoSetup.setCode(initialCode);
+
 
             // Load Testcases for this problem
             this._loadTestCases(session);
@@ -1301,6 +1308,42 @@ const SessionView = {
             }
         }
 
+        if (lowerTitle.includes('fizzbuzz') || lowerTitle.includes('fizz buzz')) {
+            if (lang === 'python') {
+                return `class Solution:\n    def fizzBuzz(self, n: int) -> list[str]:\n        pass\n`;
+            } else if (lang === 'cpp' || lang === 'c++') {
+                return `#include <vector>\n#include <string>\nusing namespace std;\n\nclass Solution {\npublic:\n    vector<string> fizzBuzz(int n) {\n        return {};\n    }\n};\n`;
+            } else if (lang === 'java') {
+                return `import java.util.*;\n\nclass Solution {\n    public List<String> fizzBuzz(int n) {\n        return new ArrayList<>();\n    }\n}\n`;
+            } else {
+                return `var fizzBuzz = function(n) {\n    return [];\n};\n`;
+            }
+        }
+
+        if (lowerTitle.includes('longest increasing subsequence') || lowerTitle.includes('lis')) {
+            if (lang === 'python') {
+                return `class Solution:\n    def lengthOfLIS(self, nums: list[int]) -> int:\n        pass\n`;
+            } else if (lang === 'cpp' || lang === 'c++') {
+                return `#include <vector>\nusing namespace std;\n\nclass Solution {\npublic:\n    int lengthOfLIS(vector<int>& nums) {\n        return 0;\n    }\n};\n`;
+            } else if (lang === 'java') {
+                return `import java.util.*;\n\nclass Solution {\n    public int lengthOfLIS(int[] nums) {\n        return 0;\n    }\n}\n`;
+            } else {
+                return `var lengthOfLIS = function(nums) {\n    return 0;\n};\n`;
+            }
+        }
+
+        if (lowerTitle.includes('maximum subarray') || lowerTitle.includes('kadane')) {
+            if (lang === 'python') {
+                return `class Solution:\n    def maxSubArray(self, nums: list[int]) -> int:\n        pass\n`;
+            } else if (lang === 'cpp' || lang === 'c++') {
+                return `#include <vector>\nusing namespace std;\n\nclass Solution {\npublic:\n    int maxSubArray(vector<int>& nums) {\n        return 0;\n    }\n};\n`;
+            } else if (lang === 'java') {
+                return `import java.util.*;\n\nclass Solution {\n    public int maxSubArray(int[] nums) {\n        return 0;\n    }\n}\n`;
+            } else {
+                return `var maxSubArray = function(nums) {\n    return 0;\n};\n`;
+            }
+        }
+
         // 3. Clean LeetCode-style algorithmic method generator for any manual / custom problem
         const cleanTitle = pTitle.replace(/^\d+[\.\s]*/, '').replace(/[^a-zA-Z0-9\s]/g, '').trim();
         const words = cleanTitle.split(/\s+/).filter(Boolean);
@@ -1315,13 +1358,14 @@ const SessionView = {
         if (lang === 'python') {
             return `class Solution:\n    def ${methodName}(self, *args, **kwargs):\n        # Implement your solution\n        pass\n`;
         } else if (lang === 'cpp' || lang === 'c++') {
-            return `#include <iostream>\n#include <vector>\n#include <string>\n\nusing namespace std;\n\nclass Solution {\npublic:\n    // Implement ${methodName}\n};\n`;
+            return `#include <iostream>\n#include <vector>\n#include <string>\n\nusing namespace std;\n\nclass Solution {\npublic:\n    void ${methodName}() {\n        // Implement your solution\n    }\n};\n`;
         } else if (lang === 'java') {
-            return `import java.util.*;\n\nclass Solution {\n    // Implement ${methodName}\n}\n`;
+            return `import java.util.*;\n\nclass Solution {\n    public void ${methodName}() {\n        // Implement your solution\n    }\n}\n`;
         } else {
-            return `/**\n * Solution\n */\nvar ${methodName} = function() {\n    // Implement your solution\n};\n`;
+            return `/**\n * @return {void}\n */\nvar ${methodName} = function() {\n    // Implement your solution\n};\n`;
         }
     },
+
 
     // ── Dry Run Execution (LeetCode "▶ Run") ──
     async dryRun() {

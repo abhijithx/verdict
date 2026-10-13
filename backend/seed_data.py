@@ -76,9 +76,20 @@ async def seed_problems(db: AsyncSession):
       3. Longest Increasing Subsequence — medium, tests dynamic programming
     """
     # Check if problems already exist to make this idempotent
-    result = await db.execute(select(Problem).limit(1))
-    if result.scalars().first() is not None:
+    result = await db.execute(select(Problem))
+    existing_problems = result.scalars().all()
+    if existing_problems:
+        from services.leetcode_service import LeetCodeService
+        updated = False
+        for p in existing_problems:
+            if not p.code_snippets:
+                p.code_snippets = LeetCodeService.get_problem_code_snippets(p.title)
+                updated = True
+        if updated:
+            await db.commit()
+            print("[SEED] Backfilled missing code snippets for existing problems")
         return  # Problems already seeded, skip
+
 
     sample_problems = [
         Problem(
@@ -101,6 +112,12 @@ async def seed_problems(db: AsyncSession):
                 "- Exactly one solution exists"
             ),
             difficulty="easy",
+            code_snippets={
+                "python": "class Solution:\n    def twoSum(self, nums: list[int], target: int) -> list[int]:\n        pass\n",
+                "cpp": "#include <vector>\nusing namespace std;\n\nclass Solution {\npublic:\n    vector<int> twoSum(vector<int>& nums, int target) {\n        return {};\n    }\n};\n",
+                "java": "import java.util.*;\n\nclass Solution {\n    public int[] twoSum(int[] nums, int target) {\n        return new int[0];\n    }\n}\n",
+                "javascript": "/**\n * @param {number[]} nums\n * @param {number} target\n * @return {number[]}\n */\nvar twoSum = function(nums, target) {\n    return [];\n};\n"
+            }
         ),
         Problem(
             title="FizzBuzz",
@@ -119,6 +136,12 @@ async def seed_problems(db: AsyncSession):
                 "- 1 ≤ N ≤ 10^6"
             ),
             difficulty="easy",
+            code_snippets={
+                "python": "class Solution:\n    def fizzBuzz(self, n: int) -> list[str]:\n        pass\n",
+                "cpp": "#include <vector>\n#include <string>\nusing namespace std;\n\nclass Solution {\npublic:\n    vector<string> fizzBuzz(int n) {\n        return {};\n    }\n};\n",
+                "java": "import java.util.*;\n\nclass Solution {\n    public List<String> fizzBuzz(int n) {\n        return new ArrayList<>();\n    }\n}\n",
+                "javascript": "/**\n * @param {number} n\n * @return {string[]}\n */\nvar fizzBuzz = function(n) {\n    return [];\n};\n"
+            }
         ),
         Problem(
             title="Longest Increasing Subsequence",
@@ -141,6 +164,12 @@ async def seed_problems(db: AsyncSession):
                 "- -10^4 ≤ nums[i] ≤ 10^4"
             ),
             difficulty="medium",
+            code_snippets={
+                "python": "class Solution:\n    def lengthOfLIS(self, nums: list[int]) -> int:\n        pass\n",
+                "cpp": "#include <vector>\nusing namespace std;\n\nclass Solution {\npublic:\n    int lengthOfLIS(vector<int>& nums) {\n        return 0;\n    }\n};\n",
+                "java": "import java.util.*;\n\nclass Solution {\n    public int lengthOfLIS(int[] nums) {\n        return 0;\n    }\n}\n",
+                "javascript": "/**\n * @param {number[]} nums\n * @return {number}\n */\nvar lengthOfLIS = function(nums) {\n    return 0;\n};\n"
+            }
         ),
     ]
 

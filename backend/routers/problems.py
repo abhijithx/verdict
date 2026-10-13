@@ -121,7 +121,12 @@ async def generate_problem_with_ai(
     from services.json_validator import JSONValidator
     import json
 
-    ai_prompt = PromptBuilder.build_problem_generation_prompt(prompt_text, request.difficulty)
+    ai_prompt = PromptBuilder.build_problem_generation_prompt(
+        prompt_text,
+        request.difficulty,
+        feedback=request.feedback,
+        previous_problem=request.previous_problem
+    )
     parsed = None
     try:
         raw_response = await call_ai(

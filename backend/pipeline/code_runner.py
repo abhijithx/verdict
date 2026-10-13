@@ -85,14 +85,25 @@ if __name__ == "__main__":
                 if not defined_names:
                     defined_names = [m for m in dir(target_obj) if not m.startswith("_") and callable(getattr(target_obj, m))]
 
-                common_names = {'twosum', 'threesum', 'foursum', 'solve', 'solution', 'isvalid', 'mergetwolists', 'merge', 'maxsubarray', 'lengthoflongestsubstring', 'climbstairs', 'coinchange', 'search', 'reversestring', 'movezeroes', 'removeduplicates', 'removeelement'}
+                common_names = {
+                    'twosum', 'threesum', 'foursum', 'fivesum', 'solve', 'solution', 'isvalid',
+                    'mergetwolists', 'merge', 'maxsubarray', 'lengthoflongestsubstring',
+                    'climbstairs', 'coinchange', 'search', 'reversestring', 'movezeroes',
+                    'removeduplicates', 'removeelement', 'reverselist', 'inverttree',
+                    'groupanagrams', 'longestconsecutive', 'topkfrequent', 'productexceptself',
+                    'rotate', 'rotatematrix', 'rotatearray', 'ispalindrome', 'validpalindrome'
+                }
                 chosen_name = None
                 for name in defined_names:
-                    if name.lower() in common_names:
+                    if name.lower() in common_names or name.lower().endswith('sum'):
                         chosen_name = name
                         break
                 if not chosen_name and defined_names:
-                    chosen_name = defined_names[0]
+                    non_helpers = [
+                        n for n in defined_names
+                        if not any(n.lower().startswith(p) for p in ('helper', 'dfs', 'bfs', 'util', 'check'))
+                    ]
+                    chosen_name = non_helpers[-1] if non_helpers else defined_names[0]
                 if chosen_name:
                     func = getattr(target_obj, chosen_name)
             except Exception:
@@ -293,15 +304,15 @@ JS_LEETCODE_HARNESS = r'''
             const methods = Object.getOwnPropertyNames(proto).filter(m => m !== 'constructor' && typeof targetObj[m] === 'function');
             if (methods.length > 0) {
                 const detected = typeof __DETECTED_NAMES__ !== 'undefined' ? __DETECTED_NAMES__ : [];
-                const candidates = [...detected, 'twoSum', 'solve', 'isValid', 'mergeTwoLists', 'maxSubArray', 'lengthOfLongestSubstring', 'solution', 'climbStairs', 'coinChange', 'search', 'reverseString', 'moveZeroes', 'removeDuplicates', 'removeElement', 'reverseList', 'invertTree'];
-                const chosen = methods.find(m => candidates.some(c => c.toLowerCase() === m.toLowerCase())) || methods[0];
+                const candidates = [...detected, 'twoSum', 'threeSum', 'fourSum', 'fiveSum', 'solve', 'isValid', 'mergeTwoLists', 'maxSubArray', 'lengthOfLongestSubstring', 'solution', 'climbStairs', 'coinChange', 'search', 'reverseString', 'moveZeroes', 'removeDuplicates', 'removeElement', 'reverseList', 'invertTree', 'groupAnagrams', 'longestConsecutive', 'topKFrequent', 'productExceptSelf', 'rotate', 'rotateArray', 'isPalindrome', 'validPalindrome'];
+                const chosen = methods.find(m => candidates.some(c => c.toLowerCase() === m.toLowerCase())) || methods.find(m => m.toLowerCase().endsWith('sum')) || methods[0];
                 fn = targetObj[chosen].bind(targetObj);
             }
         } catch(e) {}
     }
     if (!fn) {
         const detected = typeof __DETECTED_NAMES__ !== 'undefined' ? __DETECTED_NAMES__ : [];
-        const candidates = [...detected, 'twoSum', 'solve', 'isValid', 'mergeTwoLists', 'maxSubArray', 'lengthOfLongestSubstring', 'solution', 'climbStairs', 'coinChange', 'search', 'reverseString', 'moveZeroes', 'removeDuplicates', 'removeElement', 'reverseList', 'invertTree'];
+        const candidates = [...detected, 'twoSum', 'threeSum', 'fourSum', 'fiveSum', 'solve', 'isValid', 'mergeTwoLists', 'maxSubArray', 'lengthOfLongestSubstring', 'solution', 'climbStairs', 'coinChange', 'search', 'reverseString', 'moveZeroes', 'removeDuplicates', 'removeElement', 'reverseList', 'invertTree', 'groupAnagrams', 'longestConsecutive', 'topKFrequent', 'productExceptSelf', 'rotate', 'rotateArray', 'isPalindrome', 'validPalindrome'];
         for (const name of candidates) {
             try {
                 if (eval('typeof ' + name) === 'function') {
@@ -495,16 +506,28 @@ class Main {
         Class<?> solClass = Class.forName("Solution");
         Object solInstance = solClass.getDeclaredConstructor().newInstance();
         Method target = null;
-        String[] commonNames = {"twosum", "threesum", "solve", "solution", "isvalid", "mergetwolists", "merge", "maxsubarray", "lengthoflongestsubstring", "climbstairs", "coinchange", "search", "reversestring", "movezeroes", "removeduplicates", "removeelement"};
+        String[] commonNames = {"twosum", "threesum", "foursum", "fivesum", "solve", "solution", "isvalid", "mergetwolists", "merge", "maxsubarray", "lengthoflongestsubstring", "climbstairs", "coinchange", "search", "reversestring", "movezeroes", "removeduplicates", "removeelement", "reverselist", "inverttree", "groupanagrams", "longestconsecutive", "topkfrequent", "productexceptself", "rotate", "rotatearray", "ispalindrome", "validpalindrome"};
         for (Method m : solClass.getDeclaredMethods()) {
             if (Modifier.isPublic(m.getModifiers()) && !m.getName().startsWith("_")) {
+                String mName = m.getName().toLowerCase();
                 for (String cn : commonNames) {
-                    if (m.getName().equalsIgnoreCase(cn)) {
+                    if (mName.equals(cn) || mName.endsWith("sum")) {
                         target = m;
                         break;
                     }
                 }
                 if (target != null) break;
+            }
+        }
+        if (target == null) {
+            for (Method m : solClass.getDeclaredMethods()) {
+                if (Modifier.isPublic(m.getModifiers()) && !m.getName().startsWith("_")) {
+                    String mName = m.getName().toLowerCase();
+                    if (!mName.startsWith("helper") && !mName.startsWith("dfs") && !mName.startsWith("bfs")) {
+                        target = m;
+                        break;
+                    }
+                }
             }
         }
         if (target == null) {
@@ -1060,13 +1083,24 @@ class LocalRunner:
                     pub_text = "\n".join(pub_sections) if pub_sections else sol_body
                     methods = re.findall(r'([\w:<>]+(?:\s*[*&])?)\s+(\w+)\s*\(([^)]*)\)\s*\{', pub_text)
                     if methods:
-                        common_names = {'twosum', 'threesum', 'foursum', 'solve', 'solution', 'isvalid', 'mergetwolists', 'merge', 'maxsubarray', 'lengthoflongestsubstring', 'climbstairs', 'coinchange', 'search', 'reversestring', 'movezeroes', 'removeduplicates', 'removeelement'}
+                        common_names = {
+                            'twosum', 'threesum', 'foursum', 'fivesum', 'solve', 'solution', 'isvalid',
+                            'mergetwolists', 'merge', 'maxsubarray', 'lengthoflongestsubstring',
+                            'climbstairs', 'coinchange', 'search', 'reversestring', 'movezeroes',
+                            'removeduplicates', 'removeelement', 'reverselist', 'inverttree',
+                            'groupanagrams', 'longestconsecutive', 'topkfrequent', 'productexceptself',
+                            'rotate', 'rotatematrix', 'rotatearray', 'ispalindrome', 'validpalindrome'
+                        }
                         for cand in methods:
-                            if cand[1].lower() in common_names:
+                            if cand[1].lower() in common_names or cand[1].lower().endswith('sum'):
                                 chosen = cand
                                 break
                         if not chosen:
-                            chosen = methods[0]
+                            non_helpers = [
+                                m for m in methods
+                                if not any(m[1].lower().startswith(p) for p in ('helper', 'dfs', 'bfs', 'util', 'check'))
+                            ]
+                            chosen = non_helpers[-1] if non_helpers else methods[0]
                 if not chosen:
                     m = re.search(r'class\s+Solution\b[^{]*\{.*?public:\s*([\w:<>]+(?:\s*[*&])?)\s+(\w+)\s*\(([^)]*)\)', code, re.DOTALL)
                     if m:
@@ -1548,7 +1582,7 @@ class LocalCodeRunner:
 
             # If no stdin was provided: pre-flight execution check
             if not stdin or not stdin.strip():
-                rc, r_out, r_err, _ = await LocalRunner.execute_run(language, tmpdir, stdin="", timeout_ms=1500)
+                rc, r_out, r_err, _ = await LocalRunner.execute_run(language, tmpdir, stdin="", timeout_ms=3500)
 
                 # Exceptions caused by reading from empty stdin in pre-flight are normal and pass pre-flight
                 INPUT_EXHAUSTED_PATTERNS = [

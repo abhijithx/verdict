@@ -89,12 +89,128 @@ CURATED_CLASSICS = [
     {"frontend_id": "704", "title": "Binary Search", "title_slug": "binary-search", "difficulty": "Easy", "tags": ["Array", "Binary Search"]},
 ]
 
+FALLBACK_CLASSIC_SPECS = {
+    "two-sum": {
+        "title": "Two Sum",
+        "title_slug": "two-sum",
+        "difficulty": "Easy",
+        "frontend_id": "1",
+        "description": "Given an array of integers `nums` and an integer `target`, return *indices of the two numbers such that they add up to `target`*.\n\nYou may assume that each input would have ***exactly* one solution**, and you may not use the *same* element twice.\n\nYou can return the answer in any order.\n\n#### Example 1:\n**Input:** `nums = [2,7,11,15], target = 9`\n**Output:** `[0,1]`\n**Explanation:** Because nums[0] + nums[1] == 9, we return [0, 1].\n\n#### Example 2:\n**Input:** `nums = [3,2,4], target = 6`\n**Output:** `[1,2]`\n\n#### Constraints:\n- `2 <= nums.length <= 10^4`\n- `-10^9 <= nums[i] <= 10^9`\n- `-10^9 <= target <= 10^9`\n- Only one valid answer exists.",
+        "hints": [],
+        "tags": ["Array", "Hash Table"],
+        "code_snippets": {
+            "python": "class Solution:\n    def twoSum(self, nums: List[int], target: int) -> List[int]:\n        pass\n",
+            "python3": "class Solution:\n    def twoSum(self, nums: List[int], target: int) -> List[int]:\n        pass\n",
+            "cpp": "#include <vector>\nusing namespace std;\n\nclass Solution {\npublic:\n    vector<int> twoSum(vector<int>& nums, int target) {\n        return {};\n    }\n};\n",
+            "java": "import java.util.*;\n\nclass Solution {\n    public int[] twoSum(int[] nums, int target) {\n        return new int[0];\n    }\n}\n",
+            "javascript": "/**\n * @param {number[]} nums\n * @param {number} target\n * @return {number[]}\n */\nvar twoSum = function(nums, target) {\n    return [];\n};\n"
+        },
+        "sample_test_cases": [
+            {"test_case_id": "Case 1", "description": "Example 1", "stdin": "nums = [2,7,11,15], target = 9", "expected_stdout": "[0, 1]", "is_edge_case": False},
+            {"test_case_id": "Case 2", "description": "Example 2", "stdin": "nums = [3,2,4], target = 6", "expected_stdout": "[1, 2]", "is_edge_case": False},
+            {"test_case_id": "Case 3", "description": "Example 3", "stdin": "nums = [3,3], target = 6", "expected_stdout": "[0, 1]", "is_edge_case": True}
+        ]
+    },
+    "valid-parentheses": {
+        "title": "Valid Parentheses",
+        "title_slug": "valid-parentheses",
+        "difficulty": "Easy",
+        "frontend_id": "20",
+        "description": "Given a string `s` containing just the characters `'('`, `')'`, `'{'`, `'}'`, `'['` and `']'`, determine if the input string is valid.\n\nAn input string is valid if:\n1. Open brackets must be closed by the same type of brackets.\n2. Open brackets must be closed in the correct order.\n3. Every close bracket has a corresponding open bracket of the same type.\n\n#### Example 1:\n**Input:** `s = \"()\"`\n**Output:** `true`\n\n#### Example 2:\n**Input:** `s = \"()[]{}\"`\n**Output:** `true`\n\n#### Example 3:\n**Input:** `s = \"(]\"`\n**Output:** `false`\n\n#### Constraints:\n- `1 <= s.length <= 10^4`\n- `s` consists of parentheses only `'()[]{}'`.",
+        "hints": [],
+        "tags": ["String", "Stack"],
+        "code_snippets": {
+            "python": "class Solution:\n    def isValid(self, s: str) -> bool:\n        pass\n",
+            "python3": "class Solution:\n    def isValid(self, s: str) -> bool:\n        pass\n",
+            "cpp": "#include <string>\nusing namespace std;\n\nclass Solution {\npublic:\n    bool isValid(string s) {\n        return false;\n    }\n};\n",
+            "java": "import java.util.*;\n\nclass Solution {\n    public boolean isValid(String s) {\n        return false;\n    }\n}\n",
+            "javascript": "/**\n * @param {string} s\n * @return {boolean}\n */\nvar isValid = function(s) {\n    return false;\n};\n"
+        },
+        "sample_test_cases": [
+            {"test_case_id": "Case 1", "description": "Example 1", "stdin": "s = \"()\"", "expected_stdout": "true", "is_edge_case": False},
+            {"test_case_id": "Case 2", "description": "Example 2", "stdin": "s = \"()[]{}\"", "expected_stdout": "true", "is_edge_case": False},
+            {"test_case_id": "Case 3", "description": "Example 3", "stdin": "s = \"(]\"", "expected_stdout": "false", "is_edge_case": True}
+        ]
+    }
+}
+
 
 class LeetCodeService:
     """Service to interact with LeetCode GraphQL public endpoints."""
 
     def __init__(self):
         self._cache: Dict[str, Dict[str, Any]] = {}
+
+    @staticmethod
+    def get_problem_code_snippets(title_or_slug: str) -> Optional[Dict[str, str]]:
+        if not title_or_slug:
+            return None
+        import re
+        slug = re.sub(r"^\d+[\.\s\-]+", "", title_or_slug).strip().lower()
+        slug = re.sub(r"[^a-zA-Z0-9\s\-]", "", slug)
+        slug = re.sub(r"[\s_]+", "-", slug)
+
+        if slug in FALLBACK_CLASSIC_SPECS and "code_snippets" in FALLBACK_CLASSIC_SPECS[slug]:
+            return FALLBACK_CLASSIC_SPECS[slug]["code_snippets"]
+
+        # Common built-in classics
+        if "two-sum" in slug:
+            return {
+                "python": "class Solution:\n    def twoSum(self, nums: List[int], target: int) -> List[int]:\n        pass\n",
+                "cpp": "#include <vector>\nusing namespace std;\n\nclass Solution {\npublic:\n    vector<int> twoSum(vector<int>& nums, int target) {\n        return {};\n    }\n};\n",
+                "java": "import java.util.*;\n\nclass Solution {\n    public int[] twoSum(int[] nums, int target) {\n        return new int[0];\n    }\n}\n",
+                "javascript": "/**\n * @param {number[]} nums\n * @param {number} target\n * @return {number[]}\n */\nvar twoSum = function(nums, target) {\n    return [];\n};\n"
+            }
+        if "fizz-buzz" in slug or "fizzbuzz" in slug:
+            return {
+                "python": "class Solution:\n    def fizzBuzz(self, n: int) -> List[str]:\n        pass\n",
+                "cpp": "#include <vector>\n#include <string>\nusing namespace std;\n\nclass Solution {\npublic:\n    vector<string> fizzBuzz(int n) {\n        return {};\n    }\n};\n",
+                "java": "import java.util.*;\n\nclass Solution {\n    public List<String> fizzBuzz(int n) {\n        return new ArrayList<>();\n    }\n}\n",
+                "javascript": "/**\n * @param {number} n\n * @return {string[]}\n */\nvar fizzBuzz = function(n) {\n    return [];\n};\n"
+            }
+        if "longest-increasing-subsequence" in slug or "lis" in slug:
+            return {
+                "python": "class Solution:\n    def lengthOfLIS(self, nums: List[int]) -> int:\n        pass\n",
+                "cpp": "#include <vector>\nusing namespace std;\n\nclass Solution {\npublic:\n    int lengthOfLIS(vector<int>& nums) {\n        return 0;\n    }\n};\n",
+                "java": "import java.util.*;\n\nclass Solution {\n    public int lengthOfLIS(int[] nums) {\n        return 0;\n    }\n}\n",
+                "javascript": "/**\n * @param {number[]} nums\n * @return {number}\n */\nvar lengthOfLIS = function(nums) {\n    return 0;\n};\n"
+            }
+        if "valid-parentheses" in slug:
+            return {
+                "python": "class Solution:\n    def isValid(self, s: str) -> bool:\n        pass\n",
+                "cpp": "#include <string>\nusing namespace std;\n\nclass Solution {\npublic:\n    bool isValid(string s) {\n        return false;\n    }\n};\n",
+                "java": "import java.util.*;\n\nclass Solution {\n    public boolean isValid(String s) {\n        return false;\n    }\n}\n",
+                "javascript": "/**\n * @param {string} s\n * @return {boolean}\n */\nvar isValid = function(s) {\n    return false;\n};\n"
+            }
+        if "reverse-linked-list" in slug or "reverse-list" in slug:
+            return {
+                "python": "class Solution:\n    def reverseList(self, head):\n        pass\n",
+                "cpp": "class Solution {\npublic:\n    ListNode* reverseList(ListNode* head) {\n        return nullptr;\n    }\n};\n",
+                "java": "class Solution {\n    public ListNode reverseList(ListNode head) {\n        return null;\n    }\n}\n",
+                "javascript": "var reverseList = function(head) {\n    return null;\n};\n"
+            }
+        if "palindrome" in slug:
+            return {
+                "python": "class Solution:\n    def isPalindrome(self, x: int) -> bool:\n        pass\n",
+                "cpp": "class Solution {\npublic:\n    bool isPalindrome(int x) {\n        return false;\n    }\n};\n",
+                "java": "class Solution {\n    public boolean isPalindrome(int x) {\n        return false;\n    }\n}\n",
+                "javascript": "var isPalindrome = function(x) {\n    return false;\n};\n"
+            }
+
+        clean = re.sub(r"^\d+[\.\s\-]+", "", title_or_slug).strip()
+        words = [re.sub(r"[^a-zA-Z0-9]", "", w) for w in clean.split()]
+        words = [w for w in words if w]
+        m_name = words[0].lower() + "".join(w.capitalize() for w in words[1:]) if words else "solve"
+        if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", m_name):
+            m_name = "solve"
+
+        return {
+            "python": f"class Solution:\n    def {m_name}(self, *args, **kwargs):\n        pass\n",
+            "cpp": f"#include <vector>\n#include <string>\n#include <iostream>\nusing namespace std;\n\nclass Solution {{\npublic:\n    void {m_name}() {{\n        \n    }}\n}};\n",
+            "java": f"import java.util.*;\n\nclass Solution {{\n    public void {m_name}() {{\n        \n    }}\n}}\n",
+            "javascript": f"/**\n * @return {{void}}\n */\nvar {m_name} = function() {{\n    \n}};\n"
+        }
+
 
     def extract_slug(self, url_or_slug: str) -> str:
         """
@@ -145,7 +261,12 @@ class LeetCodeService:
                 response.raise_for_status()
                 data = response.json()
             except Exception as e:
-                logger.error(f"Failed to query LeetCode GraphQL for '{slug}': {e}")
+                logger.warning(f"Failed to query LeetCode GraphQL for '{slug}': {e}. Checking offline fallback.")
+                if slug in FALLBACK_CLASSIC_SPECS:
+                    logger.info(f"Using verified built-in specification for '{slug}'")
+                    spec = dict(FALLBACK_CLASSIC_SPECS[slug])
+                    self._cache[slug] = spec
+                    return spec
                 raise ValueError(f"Failed to fetch problem from LeetCode: {str(e)}")
 
         question = data.get("data", {}).get("question")

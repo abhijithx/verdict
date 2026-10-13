@@ -626,6 +626,8 @@ class ProblemGenerateRequest(BaseModel):
     """Request payload to generate a full LeetCode problem specification with AI."""
     prompt: str = Field(..., min_length=1, description="Problem concept, title, or statement")
     difficulty: Optional[str] = Field("medium", description="Desired difficulty: easy, medium, hard")
+    feedback: Optional[str] = Field(None, description="Optional user change request or refinement feedback")
+    previous_problem: Optional[Dict[str, Any]] = Field(None, description="Previous problem specification for iterative refinement")
 
 
 class ProblemGenerateTestCase(BaseModel):

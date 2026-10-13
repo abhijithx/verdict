@@ -245,46 +245,56 @@ class PromptBuilder:
     @staticmethod
     def build_problem_generation_prompt(
         prompt: str,
-        difficulty: Optional[str] = "medium"
+        difficulty: Optional[str] = "medium",
+        feedback: Optional[str] = None,
+        previous_problem: Optional[Dict[str, Any]] = None
     ) -> str:
         """
-        Build JSON request prompt for AI-generated LeetCode problem specifications and templates.
+        Build JSON request prompt for AI-generated LeetCode problem specifications and templates,
+        with optional iterative refinement based on user feedback.
         """
         payload = {
             "type": "generate_problem",
             "concept_or_title": prompt,
             "target_difficulty": difficulty or "medium",
-            "instructions": (
-                "Create a complete, authentic LeetCode-style problem specification based on the prompt.\n"
-                "Output JSON MUST conform strictly to this structure:\n"
-                "{\n"
-                '  "title": "Problem Title",\n'
-                '  "difficulty": "easy" | "medium" | "hard",\n'
-                '  "description": "### Problem Title\\n\\nProblem statement...\\n\\n#### Example 1:\\n**Input:** nums = [2,7,11,15], target = 9\\n**Output:** [0,1]\\n**Explanation:** ...\\n\\n#### Constraints:\\n- ...",\n'
-                '  "method_name": "methodName",\n'
-                '  "code_snippets": {\n'
-                '    "python": "class Solution:\\n    def methodName(self, nums: List[int], target: int) -> List[int]:\\n        pass\\n",\n'
-                '    "cpp": "#include <vector>\\nusing namespace std;\\n\\nclass Solution {\\npublic:\\n    vector<int> methodName(vector<int>& nums, int target) {\\n        return {};\\n    }\\n};\\n",\n'
-                '    "java": "import java.util.*;\\n\\nclass Solution {\\n    public int[] methodName(int[] nums, int target) {\\n        return new int[0];\\n    }\\n}\\n",\n'
-                '    "javascript": "/**\\n * @param {number[]} nums\\n * @param {number} target\\n * @return {number[]}\\n */\\nvar methodName = function(nums, target) {\\n    return [];\\n};\\n"\n'
-                '  },\n'
-                '  "sample_test_cases": [\n'
-                '    {\n'
-                '      "test_case_id": "Case 1",\n'
-                '      "description": "Example 1",\n'
-                '      "stdin": "nums = [2,7,11,15], target = 9",\n'
-                '      "expected_stdout": "[0, 1]",\n'
-                '      "is_edge_case": false\n'
-                '    },\n'
-                '    {\n'
-                '      "test_case_id": "Case 2",\n'
-                '      "description": "Edge Case - Minimal constraints",\n'
-                '      "stdin": "nums = [3,3], target = 6",\n'
-                '      "expected_stdout": "[0, 1]",\n'
-                '      "is_edge_case": true\n'
-                '    }\n'
-                '  ]\n'
-                "}"
-            )
         }
+        if feedback:
+            payload["requested_changes"] = feedback
+        if previous_problem:
+            payload["previous_version"] = previous_problem
+
+        instructions = (
+            "Create or refine a complete, authentic LeetCode-style problem specification based on the prompt.\n"
+            + ("CRITICAL: The user has requested changes to the previous draft: '" + str(feedback) + "'. Incorporate these changes into the updated specification.\n" if feedback else "")
+            + "Output JSON MUST conform strictly to this structure:\n"
+            "{\n"
+            '  "title": "Problem Title",\n'
+            '  "difficulty": "easy" | "medium" | "hard",\n'
+            '  "description": "### Problem Title\\n\\nProblem statement...\\n\\n#### Example 1:\\n**Input:** nums = [2,7,11,15], target = 9\\n**Output:** [0,1]\\n**Explanation:** ...\\n\\n#### Constraints:\\n- ...",\n'
+            '  "method_name": "methodName",\n'
+            '  "code_snippets": {\n'
+            '    "python": "class Solution:\\n    def methodName(self, nums: List[int], target: int) -> List[int]:\\n        pass\\n",\n'
+            '    "cpp": "#include <vector>\\nusing namespace std;\\n\\nclass Solution {\\npublic:\\n    vector<int> methodName(vector<int>& nums, int target) {\\n        return {};\\n    }\\n};\\n",\n'
+            '    "java": "import java.util.*;\\n\\nclass Solution {\\n    public int[] methodName(int[] nums, int target) {\\n        return new int[0];\\n    }\\n}\\n",\n'
+            '    "javascript": "/**\\n * @param {number[]} nums\\n * @param {number} target\\n * @return {number[]}\\n */\\nvar methodName = function(nums, target) {\\n    return [];\\n};\\n"\n'
+            '  },\n'
+            '  "sample_test_cases": [\n'
+            '    {\n'
+            '      "test_case_id": "Case 1",\n'
+            '      "description": "Example 1",\n'
+            '      "stdin": "nums = [2,7,11,15], target = 9",\n'
+            '      "expected_stdout": "[0, 1]",\n'
+            '      "is_edge_case": false\n'
+            '    },\n'
+            '    {\n'
+            '      "test_case_id": "Case 2",\n'
+            '      "description": "Edge Case - Minimal constraints",\n'
+            '      "stdin": "nums = [3,3], target = 6",\n'
+            '      "expected_stdout": "[0, 1]",\n'
+            '      "is_edge_case": true\n'
+            '    }\n'
+            '  ]\n'
+            "}"
+        )
+        payload["instructions"] = instructions
         return json.dumps(payload, indent=2)

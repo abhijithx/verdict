@@ -734,6 +734,9 @@
                         EXPLORER : SESSIONS
                     </span>
                     <div class="flex items-center gap-1">
+                        <button class="vsc-tool-btn" onclick="NewSessionModal.open()" title="New Session / Custom Problem (+)" aria-label="New Session">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        </button>
                         <button class="vsc-tool-btn" onclick="App.toggleCollapseAllProblems()" title="Collapse / Expand All Problems" aria-label="Collapse or Expand All Problems">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 8 12 16 20 8"/><polyline points="4 16 12 8 20 16" class="opacity-50"/></svg>
                         </button>
@@ -1153,41 +1156,109 @@
                 </div>
 
                 <div id="new-problem-fields">
-                    <div class="flex items-center justify-between mb-2.5 p-2 rounded-lg bg-surface-base/80 border border-border-subtle">
-                        <div class="flex items-center gap-1.5 text-xs text-text-secondary">
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2cbb5d" stroke-width="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-                            <span class="font-medium text-text-primary">LeetCode AI Architect</span>
+                    <!-- Step 1: Input Fields -->
+                    <div id="new-problem-input-fields">
+                        <div class="flex items-center justify-between mb-2.5 p-2 rounded-lg bg-surface-base/80 border border-border-subtle">
+                            <div class="flex items-center gap-1.5 text-xs text-text-secondary">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2cbb5d" stroke-width="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                                <span class="font-medium text-text-primary">LeetCode AI Architect</span>
+                            </div>
+                            <span class="text-[11px] text-text-tertiary">Type idea → AI generates complete LeetCode spec</span>
                         </div>
-                        <button type="button" id="btn-modal-ai-generate" onclick="NewSessionModal.generateWithAi()" class="text-xs bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded px-2.5 py-1 font-mono transition-all flex items-center gap-1" title="Generate LeetCode statement, method signature, code templates, and public/edge test cases">
-                            <span>✨ AI Auto-Generate</span>
+                        <div class="grid grid-cols-3 gap-2.5 mb-3">
+                            <div class="col-span-2">
+                                <label class="field-label-sm">Title or Topic</label>
+                                <input id="modal-problem-title" type="text" placeholder="e.g. 5 Sum, Rotate Array, Valid Palindrome" class="field-input mt-1.5">
+                            </div>
+                            <div>
+                                <label class="field-label-sm">Difficulty</label>
+                                <select id="modal-problem-diff" class="field-input mt-1.5">
+                                    <option value="easy">Easy</option>
+                                    <option value="medium" selected>Medium</option>
+                                    <option value="hard">Hard</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="field-label-sm">Draft Statement or Requirements</label>
+                            <textarea id="modal-problem-desc" rows="3" placeholder="Describe the problem, rules, return requirements, or constraints..." class="field-input mt-1.5 resize-none thin-scroll"></textarea>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mb-2.5">
+                            <div>
+                                <label class="field-label-sm">Sample Input (optional)</label>
+                                <input id="modal-sample-input" type="text" placeholder="e.g. nums = [1,2,3,4,5,6], target = 15" class="field-input mt-1 font-mono text-xs">
+                            </div>
+                            <div>
+                                <label class="field-label-sm">Sample Output (optional)</label>
+                                <input id="modal-sample-output" type="text" placeholder="e.g. [0, 1, 2, 3, 4]" class="field-input mt-1 font-mono text-xs">
+                            </div>
+                        </div>
+                        <button type="button" id="btn-modal-ai-generate" onclick="NewSessionModal.processWithAi()" class="w-full mt-1.5 py-2 px-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-sm">
+                            <span>✨ Process with AI & Review Problem</span>
                         </button>
                     </div>
-                    <div class="grid grid-cols-3 gap-2.5 mb-3">
-                        <div class="col-span-2">
-                            <label class="field-label-sm">Title</label>
-                            <input id="modal-problem-title" type="text" placeholder="e.g., Two Sum" class="field-input mt-1.5">
+
+                    <!-- Step 2: Interactive Problem Review & Refinement Panel -->
+                    <div id="modal-problem-review-panel" class="hidden border border-emerald-500/30 rounded-xl p-4 bg-void/80 space-y-3 shadow-lg">
+                        <div class="flex items-center justify-between border-b border-border-subtle pb-2.5">
+                            <div class="flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                                <span class="text-xs font-semibold text-text-primary uppercase tracking-wider">AI Problem Specification</span>
+                                <span id="review-difficulty-badge" class="px-2 py-0.5 text-[10px] font-mono rounded bg-amber-500/10 text-amber-400 border border-amber-500/30 uppercase">Medium</span>
+                            </div>
+                            <button type="button" onclick="NewSessionModal.backToEditFields()" class="text-xs text-text-tertiary hover:text-text-primary flex items-center gap-1 transition-colors">
+                                <span>← Edit Raw Fields</span>
+                            </button>
                         </div>
+
                         <div>
-                            <label class="field-label-sm">Difficulty</label>
-                            <select id="modal-problem-diff" class="field-input mt-1.5">
-                                <option value="easy">Easy</option>
-                                <option value="medium" selected>Medium</option>
-                                <option value="hard">Hard</option>
-                            </select>
+                            <div class="flex items-center justify-between">
+                                <h4 id="review-problem-title" class="text-sm font-bold text-text-primary">Problem Title</h4>
+                                <span id="review-cases-count" class="text-2xs font-mono text-text-tertiary bg-surface-base px-2 py-0.5 rounded border border-border-subtle">
+                                    4 Test Cases
+                                </span>
+                            </div>
+                            <p id="review-method-sig" class="text-xs font-mono text-emerald-400 mt-1">solve()</p>
                         </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="field-label-sm">Statement</label>
-                        <textarea id="modal-problem-desc" rows="3" placeholder="Describe the problem, I/O format, constraints..." class="field-input mt-1.5 resize-none thin-scroll"></textarea>
-                    </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                        <div>
-                            <label class="field-label-sm">Sample Input (stdin, optional)</label>
-                            <input id="modal-sample-input" type="text" placeholder="e.g. nums = [2,7,11,15], target = 9" class="field-input mt-1 font-mono text-xs">
+
+                        <div class="bg-surface-base/80 border border-border-subtle rounded-lg p-3 max-h-44 overflow-y-auto text-xs text-text-secondary thin-scroll leading-relaxed prose prose-invert prose-xs max-w-none" id="review-problem-statement">
+                            <!-- Rendered Markdown Description -->
                         </div>
+
                         <div>
-                            <label class="field-label-sm">Sample Output (stdout, optional)</label>
-                            <input id="modal-sample-output" type="text" placeholder="e.g. [0, 1]" class="field-input mt-1 font-mono text-xs">
+                            <div class="flex items-center justify-between mb-1.5">
+                                <label class="field-label-sm text-text-tertiary">Generated Test Cases Preview</label>
+                                <span class="text-3xs text-text-dim">Includes public examples & edge cases</span>
+                            </div>
+                            <div id="review-testcases-list" class="space-y-1.5 max-h-32 overflow-y-auto thin-scroll">
+                                <!-- Test cases populated dynamically -->
+                            </div>
+                        </div>
+
+                        <!-- Refinement / Change Request Box -->
+                        <div class="pt-2 border-t border-border-subtle">
+                            <label class="text-xs font-medium text-text-secondary block mb-1.5 flex items-center gap-1">
+                                <span>✏️ Need changes? Describe adjustments:</span>
+                            </label>
+                            <div class="flex items-center gap-2">
+                                <input id="modal-refine-input" type="text" placeholder="e.g. 'Use 1-based indexing', 'Function name fiveSum', 'Add duplicate elements edge case'..." 
+                                    class="flex-1 field-input !py-1.5 text-xs placeholder:text-text-dim"
+                                    onkeydown="if(event.key==='Enter'){event.preventDefault(); NewSessionModal.refineWithAi();}" />
+                                <button type="button" id="btn-modal-refine-submit" onclick="NewSessionModal.refineWithAi()" class="px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-lg text-xs font-semibold shrink-0 transition-all flex items-center gap-1">
+                                    <span>🔄 Update with AI</span>
+                                </button>
+                            </div>
+                        </div>
+                        <!-- Review Action Choices: Continue & Approve OR Request Changes -->
+                        <div class="pt-2 flex items-center justify-between gap-3 border-t border-border-subtle bg-surface-elevated/40 p-2.5 rounded-lg">
+                            <div class="flex items-center gap-1.5 text-xs text-text-secondary">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                                <span>Problem verified? Click continue to create session.</span>
+                            </div>
+                            <button type="button" id="btn-modal-review-continue" onclick="NewSessionModal.create()" class="px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-semibold shadow-sm transition-all flex items-center gap-1.5">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                                <span>Continue & Create Session</span>
+                            </button>
                         </div>
                     </div>
                 </div>

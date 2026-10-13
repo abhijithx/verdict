@@ -82,13 +82,37 @@ async def create_session(
         if default_profile:
             profile_id = default_profile.profile_id
 
+    # Determine starter code
+    init_code = session_data.code
+    lang_key = (session_data.language or "python").lower()
+
+    if not init_code and problem:
+        if not problem.code_snippets:
+            from services.leetcode_service import LeetCodeService
+            problem.code_snippets = LeetCodeService.get_problem_code_snippets(problem.title)
+            db.add(problem)
+
+        if problem.code_snippets:
+            if lang_key in problem.code_snippets:
+                init_code = problem.code_snippets[lang_key]
+            elif lang_key == "python" and "python3" in problem.code_snippets:
+                init_code = problem.code_snippets["python3"]
+            elif (lang_key in ("cpp", "c++")) and ("cpp" in problem.code_snippets or "c++" in problem.code_snippets):
+                init_code = problem.code_snippets.get("cpp") or problem.code_snippets.get("c++")
+            elif (lang_key in ("javascript", "js")) and ("javascript" in problem.code_snippets or "js" in problem.code_snippets):
+                init_code = problem.code_snippets.get("javascript") or problem.code_snippets.get("js")
+
+    if not init_code:
+        init_code = _get_boilerplate(session_data.language, problem)
+
+
     # Create the session
     new_session = Session(
         problem_id=problem_id,
         profile_id=profile_id,
         submission_label=session_data.submission_label,
         language=session_data.language,
-        code=session_data.code or _get_boilerplate(session_data.language),
+        code=init_code,
         status="draft",
     )
     db.add(new_session)
@@ -108,6 +132,32 @@ async def create_session(
             )
             db.add(db_tc)
         await db.commit()
+    else:
+        # Inherit test cases from an existing session for this problem if available
+        existing_tc_res = await db.execute(
+            select(GeneratedTestCase)
+            .join(Session, Session.session_id == GeneratedTestCase.session_id)
+            .where(Session.problem_id == problem_id, Session.session_id != new_session.session_id)
+            .order_by(GeneratedTestCase.test_id.asc())
+        )
+        existing_tcs = existing_tc_res.scalars().all()
+        if existing_tcs:
+            seen_stdins = set()
+            for idx, tc in enumerate(existing_tcs):
+                tc_key = (tc.stdin or "").strip()
+                if tc_key in seen_stdins:
+                    continue
+                seen_stdins.add(tc_key)
+                db_tc = GeneratedTestCase(
+                    session_id=new_session.session_id,
+                    test_case_id=tc.test_case_id or f"Case {idx + 1}",
+                    description=tc.description or f"Sample Case {idx + 1}",
+                    stdin=tc.stdin if tc.stdin is not None else "",
+                    expected_stdout=tc.expected_stdout if tc.expected_stdout is not None else "",
+                    is_edge_case=tc.is_edge_case,
+                )
+                db.add(db_tc)
+            await db.commit()
 
     return {
         "session_id": new_session.session_id,
@@ -440,7 +490,13 @@ async def run_session_tests(
 
     raw_cases = submission.test_cases or []
     if not raw_cases:
-        if submission.stdin is not None:
+        tc_res = await db.execute(
+            select(GeneratedTestCase).where(GeneratedTestCase.session_id == session_id).order_by(GeneratedTestCase.test_id)
+        )
+        db_cases = tc_res.scalars().all()
+        if db_cases:
+            raw_cases = db_cases
+        elif submission.stdin is not None:
             raw_cases = [type('UserTestCaseInput', (), {'test_id': 1, 'test_case_id': 'Case 1', 'description': 'Custom Input', 'stdin': submission.stdin, 'expected_stdout': '', 'is_edge_case': False})()]
         else:
             raw_cases = [type('UserTestCaseInput', (), {'test_id': 1, 'test_case_id': 'Case 1', 'description': 'Default Input', 'stdin': '', 'expected_stdout': '', 'is_edge_case': False})()]
@@ -623,11 +679,11 @@ async def submit_session(
     from sqlalchemy import delete
     await db.execute(delete(AnalysisResult).where(AnalysisResult.session_id == session_id))
     await db.execute(delete(ExecutionResult).where(ExecutionResult.session_id == session_id))
-    await db.execute(delete(GeneratedTestCase).where(GeneratedTestCase.session_id == session_id))
     await db.execute(delete(DryRunResult).where(DryRunResult.session_id == session_id))
 
-    # Persist user-provided test cases if supplied
+    # Persist user-provided test cases if supplied (only overwrite existing if provided)
     if submission.test_cases and len(submission.test_cases) > 0:
+        await db.execute(delete(GeneratedTestCase).where(GeneratedTestCase.session_id == session_id))
         for idx, tc in enumerate(submission.test_cases):
             db_tc = GeneratedTestCase(
                 session_id=session_id,
@@ -893,63 +949,55 @@ async def delete_session(session_id: int, db: AsyncSession = Depends(get_db)):
 
 
 
-def _get_boilerplate(language: str) -> str:
+def _get_boilerplate(language: str, problem: Problem = None) -> str:
     """
-    Return language-specific boilerplate code for new sessions.
-    
-    Gives users a starting template with executable I/O setup
-    for each supported language.
+    Return language-specific LeetCode class Solution template for new sessions.
     """
-    boilerplates = {
-        "python": (
-            "import sys\n\n"
-            "def solve():\n"
-            "    # Read inputs from standard input\n"
-            "    input_data = sys.stdin.read().split()\n"
-            "    if not input_data:\n"
-            "        return\n"
-            "    \n"
-            "    # Solution logic here\n"
-            "    print(\" \".join(input_data))\n\n"
-            "if __name__ == '__main__':\n"
-            "    solve()\n"
-        ),
-        "cpp": (
-            "#include <iostream>\n"
-            "#include <vector>\n"
-            "#include <string>\n\n"
-            "using namespace std;\n\n"
-            "int main() {\n"
-            "    ios_base::sync_with_stdio(false);\n"
-            "    cin.tie(NULL);\n\n"
-            "    string token;\n"
-            "    while (cin >> token) {\n"
-            "        cout << token << \" \";\n"
-            "    }\n"
-            "    cout << \"\\n\";\n"
-            "    return 0;\n"
-            "}\n"
-        ),
-        "java": (
-            "import java.util.Scanner;\n\n"
-            "public class Main {\n"
-            "    public static void main(String[] args) {\n"
-            "        Scanner sc = new Scanner(System.in);\n"
-            "        while (sc.hasNext()) {\n"
-            "            System.out.print(sc.next() + \" \");\n"
-            "        }\n"
-            "        System.out.println();\n"
-            "    }\n"
-            "}\n"
-        ),
-        "javascript": (
-            "const fs = require('fs');\n\n"
-            "function solve() {\n"
-            "    const input = fs.readFileSync(0, 'utf-8').trim();\n"
-            "    if (!input) return;\n"
-            "    console.log(input);\n"
-            "}\n\n"
-            "solve();\n"
-        ),
-    }
-    return boilerplates.get(language, "")
+    lang = (language or "python").lower()
+
+    # 1. If problem already has code_snippets, check them
+    if problem and problem.code_snippets:
+        if lang in problem.code_snippets and problem.code_snippets[lang].strip():
+            return problem.code_snippets[lang]
+        if lang == "python" and "python3" in problem.code_snippets and problem.code_snippets["python3"].strip():
+            return problem.code_snippets["python3"]
+        if lang in ("cpp", "c++") and ("cpp" in problem.code_snippets or "c++" in problem.code_snippets):
+            return problem.code_snippets.get("cpp") or problem.code_snippets.get("c++")
+        if lang in ("javascript", "js") and ("javascript" in problem.code_snippets or "js" in problem.code_snippets):
+            return problem.code_snippets.get("javascript") or problem.code_snippets.get("js")
+
+    # 2. Check LeetCodeService snippets for this problem
+    p_title = problem.title if problem and problem.title else ""
+    if p_title:
+        from services.leetcode_service import LeetCodeService
+        snippets = LeetCodeService.get_problem_code_snippets(p_title)
+        if snippets:
+            if lang in snippets and snippets[lang].strip():
+                return snippets[lang]
+            if lang == "python" and "python3" in snippets and snippets["python3"].strip():
+                return snippets["python3"]
+            if lang in ("cpp", "c++") and ("cpp" in snippets or "c++" in snippets):
+                return snippets.get("cpp") or snippets.get("c++")
+            if lang in ("javascript", "js") and ("javascript" in snippets or "js" in snippets):
+                return snippets.get("javascript") or snippets.get("js")
+
+    # 3. Dynamic LeetCode method synthesis
+    import re
+    clean_title = re.sub(r"^\d+[\.\s\-]*", "", p_title).strip()
+    words = [re.sub(r"[^a-zA-Z0-9]", "", w) for w in clean_title.split()]
+    words = [w for w in words if w]
+    method_name = "solve"
+    if words:
+        method_name = words[0].lower() + "".join(w.capitalize() for w in words[1:])
+    if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", method_name):
+        method_name = "solve"
+
+    if lang == "python":
+        return f"class Solution:\n    def {method_name}(self, *args, **kwargs):\n        pass\n"
+    elif lang in ("cpp", "c++"):
+        return f"#include <vector>\n#include <string>\n#include <iostream>\nusing namespace std;\n\nclass Solution {{\npublic:\n    void {method_name}() {{\n        \n    }}\n}};\n"
+    elif lang == "java":
+        return f"import java.util.*;\n\nclass Solution {{\n    public void {method_name}() {{\n        \n    }}\n}}\n"
+    else:  # javascript
+        return f"/**\n * @return {{void}}\n */\nvar {method_name} = function() {{\n    \n}};\n"
+

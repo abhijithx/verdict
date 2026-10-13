@@ -14,48 +14,37 @@ let editorInstance = null;
 let currentDecorations = [];
 
 const BOILERPLATES = {
-    python: `# Write your solution here
-def solve():
-    # Read input and solve
-    pass
-
-if __name__ == '__main__':
-    solve()
+    python: `class Solution:
+    def solve(self, *args, **kwargs):
+        # Write your solution here
+        pass
 `,
     cpp: `#include <iostream>
 #include <vector>
 #include <string>
-#include <algorithm>
 using namespace std;
 
-int main() {
-    ios_base::sync_with_stdio(false);
-    cin.tie(NULL);
-    
-    // Write your solution here
-    
-    return 0;
-}
+class Solution {
+public:
+    void solve() {
+        // Write your solution here
+    }
+};
 `,
     java: `import java.util.*;
-import java.io.*;
 
-public class Solution {
-    public static void main(String[] args) {
-        Scanner sc = new Scanner(System.in);
+class Solution {
+    public void solve() {
         // Write your solution here
-        
     }
 }
 `,
-    javascript: `const fs = require('fs');
-
-function solve() {
-    const input = fs.readFileSync(0, 'utf-8').trim();
+    javascript: `/**
+ * Solution
+ */
+var solve = function() {
     // Write your solution here
-}
-
-solve();
+};
 `,
 };
 
@@ -72,6 +61,7 @@ const MONACO_LANG_MAP = {
 
 const MonacoSetup = {
     _currentLanguage: 'python',
+    _pendingCode: null,
 
     init(containerId = 'editor-container', language = 'python', initialCode = null) {
         if (editorInstance || window.monacoEditor) {
@@ -99,7 +89,9 @@ const MonacoSetup = {
             require(['vs/editor/editor.main'], function () {
                 const container = document.getElementById(containerId);
                 const activeLang = MonacoSetup._currentLanguage || language;
-                const code = initialCode || BOILERPLATES[activeLang] || '';
+                const code = MonacoSetup._pendingCode !== null ? MonacoSetup._pendingCode : (initialCode || BOILERPLATES[activeLang] || '');
+                MonacoSetup._pendingCode = null;
+
 
                 const vsCodeDarkPlusRules = [
                     { token: '', background: '1e1e1e', foreground: 'd4d4d4' },
@@ -234,10 +226,11 @@ const MonacoSetup = {
 
     getCode() {
         const ed = this.getEditor();
-        return ed ? ed.getValue() : '';
+        return ed ? ed.getValue() : (this._pendingCode || '');
     },
 
     setCode(code) {
+        this._pendingCode = code;
         const ed = this.getEditor();
         if (ed) {
             ed.setValue(code);
@@ -302,8 +295,14 @@ const MonacoSetup = {
         }
 
         if (resetCode) {
-            ed.setValue(BOILERPLATES[lang] || '');
+            if (typeof SessionView !== 'undefined' && SessionView._getStarterCode) {
+                const starter = SessionView._getStarterCode(lang, SessionView._session ? SessionView._session.problem : null);
+                ed.setValue(starter);
+            } else {
+                ed.setValue(BOILERPLATES[lang] || '');
+            }
         }
+
 
         this.clearMarkers();
         if (typeof SessionView !== 'undefined' && SessionView.onLanguageChange) {

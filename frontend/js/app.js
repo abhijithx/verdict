@@ -398,28 +398,30 @@ const App = {
             this._problems = problems || [];
 
             const emptyMarkup = `
-                <div id="session-list-empty" class="flex flex-col items-center justify-center h-full px-6 py-12">
+                <div id="session-list-empty" class="flex flex-col items-center justify-center h-full px-6 py-12 gap-2.5 text-center">
                     <div class="empty-state-icon">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-text-tertiary"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                     </div>
-                    <p class="text-text-secondary text-[14px] font-medium mb-1">No sessions yet</p>
-                    <p class="text-text-tertiary text-[12px] text-center">Create a session to begin.</p>
+                    <p class="text-text-secondary text-[14px] font-medium mb-0">No sessions yet</p>
+                    <p class="text-text-tertiary text-[12px]">Create your first problem or attempt to begin.</p>
+                    <button class="cmd-btn cmd-primary text-xs py-1.5 px-3 mt-1" onclick="NewSessionModal.open()">+ New Session</button>
                 </div>`;
-
-            if (!sessions || sessions.length === 0) {
-                sessionList.innerHTML = emptyMarkup;
-                this._updateProblemFilter([]);
-                return;
-            }
 
             const problemMap = {};
             for (const p of problems) problemMap[p.problem_id] = p;
 
             const grouped = {};
-            for (const s of sessions) {
+            for (const p of problems) grouped[p.problem_id] = [];
+            for (const s of (sessions || [])) {
                 const pid = s.problem_id;
                 if (!grouped[pid]) grouped[pid] = [];
                 grouped[pid].push(s);
+            }
+
+            if (Object.keys(grouped).length === 0) {
+                sessionList.innerHTML = emptyMarkup;
+                this._updateProblemFilter([]);
+                return;
             }
 
             let html = '';
@@ -431,39 +433,47 @@ const App = {
                 const isCollapsed = this._collapsedProblems.has(String(problemId));
 
                 let sessionsHtml = '';
-                for (const s of problemSessions) {
-                    const isActive = s.session_id === this._currentSessionId;
-                    const lang = (s.language || 'python').toLowerCase();
-                    const langClass = { python: 'vsc-file-py', javascript: 'vsc-file-js', cpp: 'vsc-file-cpp', java: 'vsc-file-java' }[lang] || 'vsc-file-py';
-                    const langShort = { python: 'py', javascript: 'js', cpp: 'c++', java: 'java' }[lang] || lang.substring(0, 3);
-
-                    let statusBadge = '';
-                    if (s.status === 'complete') {
-                        const scoreVal = (s.final_score !== undefined && s.final_score !== null) ? Number(s.final_score) :
-                                         (s.analysis && s.analysis.final_score !== undefined) ? Number(s.analysis.final_score) : null;
-                        if (scoreVal !== null) {
-                            const score = Math.round(scoreVal);
-                            const scoreCol = score >= 80 ? 'text-[#2cbb5d]' : (score >= 60 ? 'text-[#f59e0b]' : 'text-[#f43f5e]');
-                            statusBadge = `<span class="vsc-score-badge ${scoreCol}" title="Verdict Score: ${score}/100">${score}</span>`;
-                        } else {
-                            statusBadge = `<span class="vsc-status-badge text-[#2cbb5d]" title="Completed">✓</span>`;
-                        }
-                    } else if (s.status.includes('failed')) {
-                        statusBadge = `<span class="vsc-status-badge text-[#f43f5e]" title="Failed">✗</span>`;
-                    } else if (s.status === 'draft') {
-                        statusBadge = `<span class="vsc-status-badge text-text-tertiary" title="Draft">•</span>`;
-                    } else {
-                        statusBadge = `<span class="vsc-status-badge text-[#f59e0b] animate-pulse" title="Evaluating">⋯</span>`;
-                    }
-
-                    const label = s.submission_label || `Attempt #${s.session_id}`;
-                    sessionsHtml += `
-                        <div class="vsc-session-item sess-item group ${isActive ? 'active' : ''}" data-session-id="${s.session_id}" role="button" tabindex="0" aria-label="Open session ${this._esc(label)}" onclick="App.openSession(${s.session_id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();App.openSession(${s.session_id})}">
-                            <span class="vsc-file-icon ${langClass}" title="${s.language}">${langShort}</span>
-                            <span class="vsc-session-label truncate" title="${this._esc(label)}">${this._esc(label)}</span>
-                            ${statusBadge}
-                            <button class="vsc-delete-btn" onclick="App.deleteSession(${s.session_id}, event)" title="Delete session" aria-label="Delete session">&times;</button>
+                if (problemSessions.length === 0) {
+                    sessionsHtml = `
+                        <div class="px-4 py-2.5 text-2xs text-text-tertiary italic flex items-center justify-between border-b border-border-subtle/50">
+                            <span>No attempts yet</span>
+                            <button class="text-xs text-accent hover:underline font-medium" onclick="App.newSessionForProblem('${problemId}', event)">+ Start Attempt</button>
                         </div>`;
+                } else {
+                    for (const s of problemSessions) {
+                        const isActive = s.session_id === this._currentSessionId;
+                        const lang = (s.language || 'python').toLowerCase();
+                        const langClass = { python: 'vsc-file-py', javascript: 'vsc-file-js', cpp: 'vsc-file-cpp', java: 'vsc-file-java' }[lang] || 'vsc-file-py';
+                        const langShort = { python: 'py', javascript: 'js', cpp: 'c++', java: 'java' }[lang] || lang.substring(0, 3);
+
+                        let statusBadge = '';
+                        if (s.status === 'complete') {
+                            const scoreVal = (s.final_score !== undefined && s.final_score !== null) ? Number(s.final_score) :
+                                             (s.analysis && s.analysis.final_score !== undefined) ? Number(s.analysis.final_score) : null;
+                            if (scoreVal !== null) {
+                                const score = Math.round(scoreVal);
+                                const scoreCol = score >= 80 ? 'text-[#2cbb5d]' : (score >= 60 ? 'text-[#f59e0b]' : 'text-[#f43f5e]');
+                                statusBadge = `<span class="vsc-score-badge ${scoreCol}" title="Verdict Score: ${score}/100">${score}</span>`;
+                            } else {
+                                statusBadge = `<span class="vsc-status-badge text-[#2cbb5d]" title="Completed">✓</span>`;
+                            }
+                        } else if (s.status.includes('failed')) {
+                            statusBadge = `<span class="vsc-status-badge text-[#f43f5e]" title="Failed">✗</span>`;
+                        } else if (s.status === 'draft') {
+                            statusBadge = `<span class="vsc-status-badge text-text-tertiary" title="Draft">•</span>`;
+                        } else {
+                            statusBadge = `<span class="vsc-status-badge text-[#f59e0b] animate-pulse" title="Evaluating">⋯</span>`;
+                        }
+
+                        const label = s.submission_label || `Attempt #${s.session_id}`;
+                        sessionsHtml += `
+                            <div class="vsc-session-item sess-item group ${isActive ? 'active' : ''}" data-session-id="${s.session_id}" role="button" tabindex="0" aria-label="Open session ${this._esc(label)}" onclick="App.openSession(${s.session_id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();App.openSession(${s.session_id})}">
+                                <span class="vsc-file-icon ${langClass}" title="${s.language}">${langShort}</span>
+                                <span class="vsc-session-label truncate" title="${this._esc(label)}">${this._esc(label)}</span>
+                                ${statusBadge}
+                                <button class="vsc-delete-btn" onclick="App.deleteSession(${s.session_id}, event)" title="Delete session" aria-label="Delete session">&times;</button>
+                            </div>`;
+                    }
                 }
 
                 html += `
@@ -483,6 +493,7 @@ const App = {
                         </div>
                     </div>`;
             }
+
 
             sessionList.innerHTML = html || `
                 <div class="flex flex-col items-center justify-center px-6 py-12 text-center">
