@@ -1,0 +1,17 @@
+{
+  "name": "verdict",
+  "version": "1.0.0",
+  "description": "Verdict AI Programming Analysis Platform",
+  "scripts": {
+    "dev": "cd backend && ../venv/bin/uvicorn main:app --reload --port 8000",
+    "start": "cd backend && ../venv/bin/uvicorn main:app --port 8000",
+    "test": "cd backend && ../venv/bin/pytest tests"
+  },
+  "keywords": [
+    "verdict",
+    "fastapi",
+    "ai-code-evaluation"
+  ],
+  "author": "",
+  "license": "ISC"
+}
