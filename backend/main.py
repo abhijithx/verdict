@@ -15,13 +15,22 @@ API docs: http://localhost:8000/docs (Swagger UI)
 """
 
 import io
+import sys
+import pathlib
 from contextlib import asynccontextmanager
+
+# Ensure backend directory is in sys.path even when uvicorn is launched from workspace root
+_BACKEND_DIR = pathlib.Path(__file__).resolve().parent
+if str(_BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_DIR))
+
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+
 
 from database import init_db, get_db, AsyncSessionLocal
 from seed_data import run_seeds

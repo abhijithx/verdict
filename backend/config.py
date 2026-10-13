@@ -6,9 +6,18 @@ and provides safe defaults for all modules.
 """
 
 import os
+import pathlib
 from dotenv import load_dotenv
 
-# Load environment variables from .env
+# Ensure .env is discovered whether running from workspace root or backend dir
+_BACKEND_DIR = pathlib.Path(__file__).resolve().parent
+_ENV_PATHS = [
+    _BACKEND_DIR / ".env",
+    _BACKEND_DIR.parent / ".env",
+]
+for _env_path in _ENV_PATHS:
+    if _env_path.exists():
+        load_dotenv(dotenv_path=_env_path, override=False)
 load_dotenv()
 
 
@@ -23,7 +32,8 @@ class Settings:
     
     # Gemini API Configuration
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
-    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
+
     
     # Groq API Configuration
     GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")

@@ -36,9 +36,17 @@ async def _call_gemini(
 
     client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
-    candidate_models = [settings.GEMINI_MODEL, "gemini-3.5-flash", "gemini-3-flash-preview", "gemini-3.1-flash-lite"]
+    candidate_models = [
+        settings.GEMINI_MODEL,
+        "gemini-3.1-flash-lite",
+        "gemini-3.8-flash",
+        "gemini-3.5-flash",
+        "gemini-flash-latest",
+        "gemini-3-flash-preview",
+    ]
     seen = set()
     models_to_try = [m for m in candidate_models if m and not (m in seen or seen.add(m))]
+
 
     last_err = None
     for model_name in models_to_try:

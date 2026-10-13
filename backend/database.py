@@ -15,14 +15,16 @@ Key components:
 import os
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
-from dotenv import load_dotenv
+from config import settings
 
-# Load environment variables from .env file in the backend directory
-load_dotenv()
+DATABASE_URL = settings.DATABASE_URL
+# If a relative sqlite path is used, ensure it is anchored to backend directory
+if DATABASE_URL.startswith("sqlite+aiosqlite:///./"):
+    _db_filename = DATABASE_URL.replace("sqlite+aiosqlite:///./", "")
+    _backend_dir = os.path.dirname(os.path.abspath(__file__))
+    _absolute_db_path = os.path.join(_backend_dir, _db_filename).replace("\\", "/")
+    DATABASE_URL = f"sqlite+aiosqlite:///{_absolute_db_path}"
 
-# Database URL — defaults to a local SQLite file in the backend directory
-# Uses aiosqlite driver for async support with SQLAlchemy
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./codescore.db")
 
 # Create the async engine
 # echo=False in production; set to True for SQL query debugging
